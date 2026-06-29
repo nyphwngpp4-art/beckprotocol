@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Beck Hawthorne: Origin</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#000;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  overflow:hidden;
+  touch-action:none;
+}
+canvas#c {
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+  display:block;
+}
+#hint {
+  color:#333;
+  font:10px monospace;
+  letter-spacing:1px;
+  margin-top:6px;
+  text-align:center;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">ARROW KEYS: MOVE &nbsp;|&nbsp; Z: INTERACT / CONFIRM &nbsp;|&nbsp; X: SKIP</div>
+<script>
+'use strict';
+// ============================================================
+// BECK HAWTHORNE: ORIGIN  — 8-bit top-down adventure
+// ============================================================
+
+// --- SETUP ---
+const GW = 256, GH = 240, TW = 16, TH = 16;
+const SCALE = Math.max(2, Math.min(4,
+  Math.floor(Math.min(window.innerWidth / GW, (window.innerHeight - 30) / GH))
+));
+const cvs = document.getElementById('c');
+cvs.width  = GW;
+cvs.height = GH;
+cvs.style.width  = GW * SCALE + 'px';
+cvs.style.height = GH * SCALE + 'px';
+const ctx = cvs.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// --- PALETTE ---
+const P = {
+  BLK:'#000000', WHT:'#F8F8F8', LGRY:'#C0C0C0', GRY:'#787878', DGRY:'#303030',
+  RED:'#D02000', LRED:'#F87060', ORG:'#E85010', YEL:'#F8D800',
+  GRN:'#00A030', LGRN:'#58D000', TEL:'#00B898', LTEL:'#00F0D0',
+  BLU:'#1030F0', LBLU:'#5090F8', NAV:'#000870', PUR:'#800890',
+  SKN:'#F0B890', BRW:'#3C2400', DBRW:'#200C00', TAN:'#C8A060',
+  WOD:'#6C4820', DWOD:'#3C2808', STN:'#686060', DSTN:'#383030',
+  NGT:'#040810', NGTF:'#0C1820', WLCL:'#1C1028', BDP:'#7048A0',
+  DSK:'#5C3C18', CSC:'#10D8E8', WIN:'#4070B0', MET:'#484848',
+  RST:'#503018', AMB:'#F0A820', PNK:'#F080C0', SCHF:'#6C5C48',
+  SCHW:'#3C2C20', LOC:'#504438',
+};
+
+// --- TILES: [bg color, solid, render fn extra?] ---
+const T = {
+  0: {c:P.WLCL, s:1},   // wall (generic)
+  1: {c:'#383048', s:0}, // bedroom floor
+  2: {c:P.BDP,    s:1},  // bed
+  3: {c:P.DSK,    s:1},  // desk
+  4: {c:P.CSC,    s:0},  // computer screen (interactable)
+  5: {c:P.WIN,    s:1},  // window
+  6: {c:'#2C2840',s:1},  // bookshelf
+  7: {c:'#1C1430',s:1},  // door frame
+  8: {c:'#0C1820',s:0},  // dock floor
+  9: {c:P.RST,    s:1},  // shipping crate
+  10:{c:P.MET,    s:1},  // metal container wall
+  11:{c:'#404040',s:1},  // chain-link fence
+  12:{c:'#306020',s:0},  // exit zone (fence gap) — glows green
+  13:{c:P.SCHF,   s:0},  // school floor
+  14:{c:P.SCHW,   s:1},  // school wall
+  15:{c:P.LOC,    s:1},  // locker
+  16:{c:'#2C4830',s:1},  // evidence crate (darker)
+  17:{c:'#201828',s:0},  // dock shadow floor
+  18:{c:P.SCHF,   s:0},  // cafeteria floor (slightly lighter)
+  19:{c:'#504030',s:1},  // cafeteria table
+  20:{c:'#302818',s:1},  // dark dock border
+  21:{c:'#484848',s:1},  // wall (school/cafe)
+};
+
+// ============================================================
+// MAP DATA  (tile aliases for readability)
+// ============================================================
+const W0=0,BF=1,BD=2,DK=3,CO=4,WN=5,BS=6,DR=7, // bedroom
+      DF=8,CR=9,MW=10,FN=11,EX=12,               // dock
+      SF=13,SW=14,LK=15,EC=16,SH=17,CF=18,CT=19, // school/cafe
+      DB=20,MT=21;                                 // misc
+
+const MAPS = {
+
+bedroom: {
+  name:"Beck's Bedroom",
+  w:16, h:11,
+  playerSpawn:{x:7*TW+8, y:8*TH},
+  bgCol:'#04030C',
+  rows:[
+    [W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0],
+    [W0,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
+    [W0,BD,BD,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,WN,WN,W0],
+    [W0,BD,BD,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
+    [W0,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
+    [W0,BF,BF,BF,BF,BF,BF,BF,BS,BS,BS,BF,BF,BF,BF,W0],
+    [W0,BF,BF,BF,BF,BF,BF,BF,DK,CO,DK,BF,BF,BF,BF,W0],
+    [W0,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
+    [W0,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
+    [W0,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
+    [W0,W0,W0,W0,W0,W0,W0,DR,W0,W0,W0,W0,W0,W0,W0,W0],
+  ],
+  items:[
+    {tx:9, ty:6, id:'computer', label:'[Z] Pattern Lock'},
+  ],
+  npcs:[],
+  nextScene:'',
+},
+
+dock: {
+  name:'East Dock',
+  w:22, h:15,
+  playerSpawn:{x:11*TW, y:13*TH},
+  bgCol:'#020508',
+  rows:[
+    [DB,FN,FN,FN,FN,FN,FN,FN,EX,FN,FN,FN,FN,FN,FN,FN,FN,FN,FN,FN,FN,DB],
+    [DB,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DB],
+    [DB,DF,CR,CR,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,CR,CR,DF,DB],
+    [DB,DF,CR,EC,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,CR,DF,DF,DB],
+    [DB,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DB],
+    [DB,DF,DF,DF,CR,CR,CR,CR,DF,DF,DF,DF,DF,CR,CR,CR,CR,DF,DF,DF,DF,DB],
+    [DB,DF,DF,DF,CR,EC,CR,CR,DF,DF,DF,DF,DF,CR,CR,CR,CR,DF,DF,DF,DF,DB],
+    [DB,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DB],
+    [DB,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DB],
+    [DB,MW,MW,MW,MW,MW,MW,MW,DF,DF,DF,DF,DF,MW,MW,MW,MW,MW,MW,MW,DF,DB],
+    [DB,MW,SH,SH,SH,SH,SH,MW,DF,DF,DF,DF,DF,MW,SH,SH,SH,EC,SH,MW,DF,DB],
+    [DB,MW,SH,SH,SH,SH,SH,MW,DF,DF,DF,DF,DF,MW,SH,SH,SH,SH,SH,MW,DF,DB],
+    [DB,MW,MW,MW,MW,MW,MW,MW,DF,DF,DF,DF,DF,MW,MW,MW,MW,MW,MW,MW,DF,DB],
+    [DB,DF,DF,EC,CR,CR,CR,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DB],
+    [DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB],
+  ],
+  items:[
+    {tx:3,  ty:3,  id:'evidence_manifest', label:'[Z] Inspect manifest'},
+    {tx:5,  ty:6,  id:'evidence_crates',   label:'[Z] Inspect crates'},
+    {tx:17, ty:10, id:'evidence_photos',   label:'[Z] Inspect photos'},
+    {tx:3,  ty:13, id:'evidence_plates',   label:'[Z] Check plates'},
+  ],
+  npcs:[
+    {x:15*TW, y:12*TH, id:'smuggler', col:P.RED, w:14, h:14,
+     dir:'down', speed:0.85, active:false, isCopy:false, cooldown:0},
+  ],
+  nextScene:'school',
+},
+
+school: {
+  name:'Westview High',
+  w:20, h:11,
+  playerSpawn:{x:2*TW, y:5*TH},
+  bgCol:'#1C1410',
+  rows:[
+    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SW],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [SW,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SW],
+    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+  ],
+  items:[],
+  npcs:[
+    {x:6*TW, y:5*TH, id:'indy', col:P.PNK, w:12, h:14, dir:'right',
+     speed:0, active:true, isCopy:false, cooldown:0},
+    // arrow marker
+    {x:18*TW, y:5*TH, id:'cafe_arrow', col:P.YEL, w:12, h:12,
+     dir:'right', speed:0, active:true, isCopy:false, cooldown:0},
+  ],
+  nextScene:'cafeteria',
+},
+
+cafeteria: {
+  name:'Cafeteria',
+  w:20, h:14,
+  playerSpawn:{x:2*TW, y:7*TH},
+  bgCol:'#181008',
+  rows:[
+    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
+    [SW,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CF,CF,SW],
+    [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
+    [SW,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CF,CF,SW],
+    [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
+    [SW,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CF,CF,SW],
+    [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
+    [SW,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CF,CF,SW],
+    [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
+    [SW,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CF,CF,SW],
+    [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
+    [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
+    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+  ],
+  items:[],
+  npcs:[
+    {x:8*TW,  y:3*TH, id:'sterling', col:P.LBLU, w:12, h:14,
+     dir:'down', speed:0, active:true, isCopy:false, cooldown:0},
+    {x:10*TW, y:3*TH, id:'kane',     col:P.LGRY, w:12, h:14,
+     dir:'down', speed:0, active:true, isCopy:false, cooldown:0},
+  ],
+  nextScene:'ending',
+},
+
+};
+
+// ============================================================
+// INPUT
+// ============================================================
+const keys = {};
+const justPressed = {};
+document.addEventListener('keydown', e => {
+  if (!keys[e.code]) justPressed[e.code] = true;
+  keys[e.code] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))
+    e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Mobile D-pad touch (simple overlay buttons injected below canvas)
+function setupTouch() {
+  const pad = document.createElement('div');
+  pad.style.cssText = `display:flex;flex-direction:column;align-items:center;
+    margin-top:8px;gap:2px;user-select:none;`;
+  const row = (btns) => {
+    const r = document.createElement('div');
+    r.style.cssText = 'display:flex;gap:2px;';
+    btns.forEach(([label, code]) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = `width:44px;height:44px;background:#222;color:#0f0;
+        border:1px solid #444;border-radius:6px;font-size:18px;
+        cursor:pointer;touch-action:none;`;
+      b.addEventListener('pointerdown', e => { e.preventDefault(); keys[code]=true; justPressed[code]=true; });
+      b.addEventListener('pointerup',   e => { e.preventDefault(); keys[code]=false; });
+      r.appendChild(b);
+    });
+    pad.appendChild(r);
+  };
+  row([['↑','ArrowUp']]);
+  row([['←','ArrowLeft'],['Z','KeyZ'],['→','ArrowRight']]);
+  row([['↓','ArrowDown'],['X','KeyX'],['','']]);
+  document.body.appendChild(pad);
+}
+if ('ontouchstart' in window) setupTouch();
+
+// ============================================================
+// GAME STATE
+// ============================================================
+const game = {
+  state: 'TITLE',      // TITLE, CUTSCENE, EXPLORE, MINIGAME_PUZZLE,
+                       // DOCK_CHASE, DIALOGUE, ENDING
+  frame: 0,
+  mapId: 'bedroom',
+  evidenceFound: [],   // filled with item ids
+  choices: {},
+  dockChaseActive: false,
+  cutsceneQueue: [],
+  cutsceneIdx: 0,
+};
+
+// Player
+const pl = {
+  x:0, y:0, w:12, h:12,
+  speed:1.8,
+  dir:'down',
+  frame:0, frameTimer:0,
+  moving:false,
+  hearts:3, maxHearts:3,
+  invincible:0,
+};
+
+// Camera
+const cam = { x:0, y:0 };
+
+function updateCam() {
+  const map = MAPS[game.mapId];
+  cam.x = Math.round(pl.x + pl.w/2 - GW/2);
+  cam.y = Math.round(pl.y + pl.h/2 - GH/2);
+  cam.x = Math.max(0, Math.min(cam.x, map.w * TW - GW));
+  cam.y = Math.max(0, Math.min(cam.y, map.h * TH - GH));
+}
+
+// ============================================================
+// DIALOGUE SYSTEM
+// ============================================================
+const dlg = {
+  active: false,
+  lines: [],
+  idx: 0,
+  charIdx: 0,
+  charTimer: 0,
+  choices: null,
+  choiceIdx: 0,
+  onDone: null,
+  speaker: '',
+  speakerCol: P.WHT,
+};
+
+function startDialogue(lines, onDone) {
+  dlg.active = true;
+  dlg.lines   = lines;
+  dlg.idx     = 0;
+  dlg.charIdx = 0;
+  dlg.charTimer = 0;
+  dlg.choices = null;
+  dlg.onDone  = onDone || null;
+  game.state  = 'DIALOGUE';
+  if (lines[0] && lines[0].speaker) {
+    dlg.speaker    = lines[0].speaker;
+    dlg.speakerCol = lines[0].col || P.WHT;
+  }
+}
+
+function jumpTo(label) {
+  const idx = dlg.lines.findIndex(l => l.label === label);
+  if (idx !== -1) {
+    dlg.idx     = idx;
+    dlg.charIdx = 0;
+    dlg.choices = null;
+    dlg.choiceIdx = 0;
+    updateSpeaker();
+    // If the destination is itself a jump line, follow it immediately
+    const dest = dlg.lines[idx];
+    if (dest && dest.jump) jumpTo(dest.jump);
+  }
+}
+
+function advanceDialogue() {
+  const cur = dlg.lines[dlg.idx];
+
+  // If still typing, jump to end of text
+  if (cur && !cur.choices && !cur.jump && dlg.charIdx < (cur.text || '').length) {
+    dlg.charIdx = (cur.text || '').length;
+    return;
+  }
+
+  // Inline jump line (no text, just redirect)
+  if (cur && cur.jump) {
+    jumpTo(cur.jump);
+    return;
+  }
+
+  // Choice line — confirm selection
+  if (cur && cur.choices) {
+    const chosen = cur.choices[dlg.choiceIdx];
+    if (chosen.pick) game.choices[chosen.pick[0]] = chosen.pick[1];
+    if (chosen.jump) { jumpTo(chosen.jump); return; }
+  }
+
+  dlg.idx++;
+
+  // Auto-skip jump lines
+  while (dlg.idx < dlg.lines.length && dlg.lines[dlg.idx] && dlg.lines[dlg.idx].jump) {
+    jumpTo(dlg.lines[dlg.idx].jump);
+    return;
+  }
+
+  if (dlg.idx >= dlg.lines.length) {
+    dlg.active  = false;
+    dlg.choices = null;
+    game.state  = game.dockChaseActive ? 'DOCK_CHASE' : 'EXPLORE';
+    if (dlg.onDone) dlg.onDone();
+    return;
+  }
+
+  dlg.charIdx   = 0;
+  dlg.charTimer = 0;
+  dlg.choices   = null;
+  dlg.choiceIdx = 0;
+  updateSpeaker();
+}
+
+function updateSpeaker() {
+  const cur = dlg.lines[dlg.idx];
+  if (cur && cur.speaker !== undefined) {
+    dlg.speaker    = cur.speaker;
+    dlg.speakerCol = cur.col || P.WHT;
+  }
+}
+
+function updateDialogue() {
+  const cur = dlg.lines[dlg.idx];
+  if (!cur) return;
+
+  if (cur.choices) {
+    dlg.choices = cur.choices;
+    if (justPressed['ArrowUp'])   dlg.choiceIdx = Math.max(0, dlg.choiceIdx - 1);
+    if (justPressed['ArrowDown'])  dlg.choiceIdx = Math.min(cur.choices.length - 1, dlg.choiceIdx + 1);
+    if (justPressed['KeyZ'])       advanceDialogue();
+    return;
+  }
+
+  dlg.choices = null;
+  if (dlg.charIdx < (cur.text || '').length) {
+    dlg.charTimer++;
+    if (dlg.charTimer >= 2) {
+      dlg.charTimer = 0;
+      dlg.charIdx++;
+    }
+  }
+  if (justPressed['KeyZ'] || justPressed['KeyX']) advanceDialogue();
+}
+
+// ============================================================
+// DRAWING HELPERS
+// ============================================================
+function px(x, y, w, h, col) {
+  ctx.fillStyle = col;
+  ctx.fillRect(x, y, w, h);
+}
+
+function drawText(text, x, y, col, size) {
+  ctx.fillStyle = col || P.WHT;
+  ctx.font = `${size || 6}px monospace`;
+  ctx.fillText(text, x, y);
+}
+
+function drawWrappedText(text, x, y, maxW, col, size) {
+  const sz   = size || 6;
+  const lineH = sz + 3;
+  ctx.fillStyle = col || P.WHT;
+  ctx.font = `${sz}px monospace`;
+  const words = text.split(' ');
+  let line = '';
+  let cy   = y;
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, cy);
+      cy += lineH;
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, x, cy);
+  return cy + lineH;
+}
+
+// 8-bit style dialog box
+function drawDialogueBox() {
+  if (!dlg.active) return;
+  const cur = dlg.lines[dlg.idx];
+  if (!cur) return;
+
+  const bx = 4, by = GH - 66, bw = GW - 8, bh = 62;
+
+  // Box bg + border
+  px(bx,   by,   bw,   bh,   P.BLK);
+  px(bx,   by,   bw,   2,    P.WHT);
+  px(bx,   by+bh-2, bw, 2,  P.WHT);
+  px(bx,   by,   2,    bh,   P.WHT);
+  px(bx+bw-2, by, 2,   bh,   P.WHT);
+  px(bx+2, by+2, bw-4, bh-4, '#0C0C1C');
+
+  // Speaker name
+  if (dlg.speaker) {
+    px(bx+4, by-10, dlg.speaker.length * 6 + 8, 12, P.BLK);
+    px(bx+4, by-10, dlg.speaker.length * 6 + 8, 2,  dlg.speakerCol);
+    drawText(dlg.speaker, bx+8, by-2, dlg.speakerCol, 6);
+  }
+
+  if (cur.choices) {
+    // Draw choices
+    drawText('Choose:', bx+8, by+12, P.LGRY, 6);
+    cur.choices.forEach((ch, i) => {
+      const cy = by + 22 + i * 13;
+      const sel = i === dlg.choiceIdx;
+      if (sel) px(bx+8, cy-7, bw-16, 11, '#1C1C3C');
+      drawText((sel ? '▶ ' : '  ') + ch.text, bx+12, cy, sel ? P.YEL : P.LGRY, 6);
+    });
+    return;
+  }
+
+  // Draw typed text
+  const displayed = (cur.text || '').substring(0, dlg.charIdx);
+  drawWrappedText(displayed, bx+8, by+14, bw-20, P.WHT, 6);
+
+  // Blinking arrow if done
+  if (dlg.charIdx >= (cur.text || '').length) {
+    if (Math.floor(game.frame / 20) % 2 === 0)
+      drawText('▼', bx+bw-12, by+bh-6, P.YEL, 6);
+  }
+}
+
+// ============================================================
+// SPRITES
+// ============================================================
+function drawChar(cx, cy, col, dir, fr, size) {
+  // cx, cy in game px (already camera-adjusted)
+  const s = size || 1;
+  const blink = pl.invincible > 0 && Math.floor(game.frame / 4) % 2;
+
+  if (blink) return; // flicker when invincible
+
+  // hair
+  px(cx+3*s, cy,    10*s, 4*s,  '#3C2400');
+  // face
+  px(cx+3*s, cy+3*s, 10*s, 5*s, P.SKN);
+  // eyes
+  const ex = dir==='left' ? cx+3*s : dir==='right' ? cx+9*s : cx+5*s;
+  const ex2 = dir==='right' ? cx+9*s : cx+9*s;
+  if (dir !== 'up') {
+    px(cx+4*s, cy+5*s, 2*s, 2*s, '#1C0800');
+    px(cx+10*s,cy+5*s, 2*s, 2*s, '#1C0800');
+  }
+  // body
+  px(cx+2*s, cy+8*s,  12*s, 5*s, col);
+  // arms (animated)
+  const aOff = fr === 0 ? 0 : 1*s;
+  px(cx,     cy+8*s+aOff,  2*s, 4*s, col);
+  px(cx+14*s,cy+8*s-aOff, 2*s, 4*s, col);
+  // legs
+  const lOff = fr === 0 ? 0 : 1*s;
+  px(cx+3*s, cy+13*s,  4*s, 3*s, '#1848A0');
+  px(cx+9*s, cy+13*s,  4*s, 3*s, '#1848A0');
+  if (fr === 0) { px(cx+3*s,cy+14*s,4*s,1*s,'#1848A0'); }
+  else          { px(cx+9*s,cy+14*s,4*s,1*s,'#1848A0'); }
+  // shoes
+  px(cx+2*s, cy+15*s, 5*s, 1*s, '#2C1408');
+  px(cx+9*s, cy+15*s, 5*s, 1*s, '#2C1408');
+}
+
+function drawPlayer() {
+  const sx = pl.x - cam.x;
+  const sy = pl.y - cam.y;
+  // Shadow
+  px(sx+2, sy+15, 12, 2, '#00000060');
+  drawChar(sx, sy, P.TEL, pl.dir, pl.frame);
+}
+
+function drawNPC(npc) {
+  if (!npc.active) return;
+  const sx = npc.x - cam.x;
+  const sy = npc.y - cam.y;
+  if (sx < -20 || sx > GW+20 || sy < -20 || sy > GH+20) return;
+  px(sx+2, sy+15, 12, 2, '#00000060');
+  drawChar(sx, sy, npc.col, npc.dir, Math.floor(game.frame/15)%2);
+  // Label above certain NPCs
+  if (npc.id === 'indy') {
+    drawText('INDY', sx+1, sy-4, P.PNK, 5);
+  } else if (npc.id === 'sterling') {
+    drawText('STERLING', sx-8, sy-4, P.LBLU, 5);
+  } else if (npc.id === 'kane') {
+    drawText('KANE', sx+2, sy-4, P.LGRY, 5);
+  } else if (npc.id === 'cafe_arrow') {
+    // Draw arrow indicating cafeteria is right
+    if (Math.floor(game.frame/20)%2===0)
+      drawText('► CAFE', sx, sy+6, P.YEL, 5);
+    return;
+  }
+}
+
+// ============================================================
+// MAP RENDERING
+// ============================================================
+function drawMap() {
+  const map  = MAPS[game.mapId];
+  const rows = map.rows;
+  // Background
+  ctx.fillStyle = map.bgCol;
+  ctx.fillRect(0, 0, GW, GH);
+
+  const startTX = Math.floor(cam.x / TW);
+  const startTY = Math.floor(cam.y / TH);
+  const endTX   = Math.min(map.w, startTX + Math.ceil(GW/TW) + 1);
+  const endTY   = Math.min(map.h, startTY + Math.ceil(GH/TH) + 1);
+
+  for (let ty = startTY; ty < endTY; ty++) {
+    for (let tx = startTX; tx < endTX; tx++) {
+      if (!rows[ty]) continue;
+      const id  = rows[ty][tx];
+      const def = T[id];
+      if (!def) continue;
+      const sx  = tx * TW - cam.x;
+      const sy  = ty * TH - cam.y;
+
+      ctx.fillStyle = def.c;
+      ctx.fillRect(sx, sy, TW, TH);
+
+      // Tile details
+      if (id === 4) { // computer screen glow
+        const g = Math.floor(game.frame/8)%2 ? '#20F8F8' : '#10D8E8';
+        px(sx+2, sy+2, 12, 10, g);
+        px(sx+4, sy+4, 8, 6, '#CCFFFF');
+      } else if (id === 2) { // bed
+        px(sx+1, sy+1, 14, 6, '#9060C0'); // pillow
+        px(sx+1, sy+7, 14, 8, '#5030A0'); // sheet
+      } else if (id === 12) { // exit zone
+        const glowF = Math.floor(game.frame/15)%2;
+        px(sx, sy, TW, TH, glowF ? '#30A840' : '#206830');
+        drawText('EXIT', sx+1, sy+10, P.YEL, 5);
+      } else if (id === 16) { // evidence crate
+        px(sx+1, sy+1, 14, 14, '#2C4830');
+        px(sx+3, sy+3, 10, 10, '#1C3820');
+        if (Math.floor(game.frame/20)%2)
+          px(sx+6, sy+6, 4, 4, P.AMB);
+      } else if (id === 15) { // lockers
+        for (let i=0;i<2;i++) {
+          px(sx+1+i*8, sy+2, 6, TH-4, '#3C3028');
+          px(sx+1+i*8, sy+TH/2, 6, 1, '#2C2018');
+          px(sx+5+i*8, sy+4, 2, 2, '#787060');
+        }
+      } else if (id === 5) { // window (bedroom)
+        px(sx+1, sy+1, 14, 14, '#3060A0');
+        px(sx+7, sy+1, 2,  14, '#204070');
+        px(sx+1, sy+7, 14, 2,  '#204070');
+        // Stars
+        if (game.frame%60<30) px(sx+3, sy+3, 1, 1, P.WHT);
+        px(sx+11, sy+10, 1, 1, P.WHT);
+      } else if (id === 11) { // fence
+        px(sx+7, sy, 2, TH, '#555555');
+        for (let fy=0;fy<TH;fy+=4) px(sx, sy+fy, TW, 1, '#444444');
+      } else if (id === 19) { // cafeteria table
+        px(sx+1, sy+3, 14, 10, '#604C30');
+        px(sx+1, sy+3, 14, 2,  '#705838');
+      } else if (id === 9) { // crate
+        px(sx+1, sy+1, 14, 14, '#6C4820');
+        px(sx+3, sy+3, 10, 10, '#5C3818');
+        px(sx+7, sy+1, 2,  14, '#4C3010');
+        px(sx+1, sy+7, 14, 2,  '#4C3010');
+      }
+    }
+  }
+
+  // Item indicators (only if not found)
+  const map2 = MAPS[game.mapId];
+  map2.items.forEach(item => {
+    if (game.evidenceFound.includes(item.id)) return;
+    if (item.id === 'computer') return; // always show computer
+    const sx = item.tx * TW - cam.x;
+    const sy = item.ty * TH - cam.y;
+    if (Math.floor(game.frame/15)%2===0) {
+      px(sx+4, sy-6, 8, 6, P.AMB);
+      drawText('!', sx+6, sy-2, P.BLK, 5);
+    }
+  });
+}
+
+// ============================================================
+// COLLISION
+// ============================================================
+function tileSolid(tx, ty) {
+  const map  = MAPS[game.mapId];
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return true;
+  const id   = map.rows[ty][tx];
+  const def  = T[id];
+  return def ? def.s : true;
+}
+
+function rectSolid(x, y, w, h) {
+  const x2 = x + w - 1;
+  const y2 = y + h - 1;
+  return (
+    tileSolid(Math.floor(x/TW),  Math.floor(y/TH))  ||
+    tileSolid(Math.floor(x2/TW), Math.floor(y/TH))  ||
+    tileSolid(Math.floor(x/TW),  Math.floor(y2/TH)) ||
+    tileSolid(Math.floor(x2/TW), Math.floor(y2/TH))
+  );
+}
+
+// ============================================================
+// PLAYER MOVEMENT
+// ============================================================
+function updatePlayer() {
+  if (game.state !== 'EXPLORE' && game.state !== 'DOCK_CHASE') return;
+
+  let dx = 0, dy = 0;
+  if (keys['ArrowLeft'] || keys['KeyA'])  dx = -pl.speed;
+  if (keys['ArrowRight']|| keys['KeyD'])  dx =  pl.speed;
+  if (keys['ArrowUp']   || keys['KeyW'])  dy = -pl.speed;
+  if (keys['ArrowDown'] || keys['KeyS'])  dy =  pl.speed;
+
+  if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+
+  pl.moving = dx !== 0 || dy !== 0;
+
+  if (pl.moving) {
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      pl.dir = dx > 0 ? 'right' : 'left';
+    } else {
+      pl.dir = dy > 0 ? 'down' : 'up';
+    }
+    pl.frameTimer++;
+    if (pl.frameTimer >= 12) { pl.frameTimer = 0; pl.frame = 1 - pl.frame; }
+  } else {
+    pl.frame = 0;
+  }
+
+  const nx = pl.x + dx;
+  const ny = pl.y + dy;
+  const margin = 2;
+
+  if (!rectSolid(nx + margin, pl.y + margin, pl.w - margin*2, pl.h - margin*2))
+    pl.x = nx;
+  if (!rectSolid(pl.x + margin, ny + margin, pl.w - margin*2, pl.h - margin*2))
+    pl.y = ny;
+
+  if (pl.invincible > 0) pl.invincible--;
+}
+
+// ============================================================
+// INTERACTION CHECK
+// ============================================================
+function checkInteract() {
+  if (!justPressed['KeyZ']) return;
+  if (game.state !== 'EXPLORE') return;
+
+  const cx = pl.x + pl.w/2;
+  const cy = pl.y + pl.h/2;
+  const map = MAPS[game.mapId];
+
+  // Check items
+  for (const item of map.items) {
+    const ix = item.tx * TW + TW/2;
+    const iy = item.ty * TH + TH/2;
+    if (Math.abs(cx - ix) < TW * 1.5 && Math.abs(cy - iy) < TH * 1.5) {
+      handleItem(item);
+      return;
+    }
+  }
+
+  // Check NPCs
+  for (const npc of map.npcs) {
+    if (!npc.active || npc.id === 'smuggler' || npc.id === 'cafe_arrow') continue;
+    const nx = npc.x + 6;
+    const ny = npc.y + 7;
+    if (Math.abs(cx - nx) < TW * 2 && Math.abs(cy - ny) < TH * 2) {
+      handleNPC(npc);
+      return;
+    }
+  }
+}
+
+// ============================================================
+// ITEM INTERACTIONS
+// ============================================================
+function handleItem(item) {
+  if (item.id === 'computer') {
+    startPuzzleMinigame();
+    return;
+  }
+
+  if (item.id.startsWith('evidence_') && !game.evidenceFound.includes(item.id)) {
+    const texts = {
+      evidence_manifest: [
+        {speaker:'', text:'You find a clipboard inside the guard booth.'},
+        {speaker:'BECK', col:P.TEL, text:'Shipping manifest. "Agricultural equipment." Three signatures... one has a government seal.'},
+        {speaker:'BECK', col:P.TEL, text:"That seal doesn't belong on a dock job. Something is very wrong here."},
+      ],
+      evidence_crates: [
+        {speaker:'', text:'You lift the lid of an unmarked crate.'},
+        {speaker:'BECK', col:P.TEL, text:'These weigh nothing like farm tools. She photographs everything.'},
+        {speaker:'BECK', col:P.TEL, text:'Military-grade packaging foam. Whatever is inside is being protected from impact.'},
+      ],
+      evidence_photos: [
+        {speaker:'', text:'Inside the storage shed: a folding table covered in photographs.'},
+        {speaker:'BECK', col:P.TEL, text:'Rifles. Rocket components. Night-vision equipment. Serial numbers visible.'},
+        {speaker:'BECK', col:P.TEL, text:'She photographs every single one. Her shutter sound has been off for months.'},
+      ],
+      evidence_plates: [
+        {speaker:'', text:'Two vans. Plates covered by mud shields.'},
+        {speaker:'BECK', col:P.TEL, text:'One shield slipped. Partial plate: 7-KX-4. Colorado commercial.'},
+        {speaker:'BECK', col:P.TEL, text:'She gets the photo. Good enough.'},
+      ],
+    };
+
+    game.evidenceFound.push(item.id);
+
+    const lines = texts[item.id] || [{text:'You found something.'}];
+    const allFound = ['evidence_manifest','evidence_crates','evidence_photos','evidence_plates']
+      .every(id => game.evidenceFound.includes(id));
+
+    startDialogue(allFound ? [
+      ...lines,
+      {speaker:'BECK', col:P.TEL, text:"That's everything. Four pieces of evidence. Time to get out."},
+      {speaker:'', text:'The smugglers haven\'t spotted you yet. Reach the EXIT at the top of the dock.'},
+      {speaker:'', text:'GET OUT NOW — reach the glowing EXIT at the top of the map!'},
+    ] : lines, () => {
+      if (allFound) triggerDockChase();
+    });
+    return;
+  }
+
+  if (item.id.startsWith('evidence_') && game.evidenceFound.includes(item.id)) {
+    startDialogue([{speaker:'', text:'Already documented.'}]);
+  }
+}
+
+// ============================================================
+// NPC INTERACTIONS
+// ============================================================
+function handleNPC(npc) {
+  if (npc.id === 'indy') startIndyDialogue();
+  else if (npc.id === 'sterling') startRecruitmentDialogue();
+  else if (npc.id === 'kane')     startRecruitmentDialogue();
+}
+
+function startIndyDialogue() {
+  startDialogue([
+    {speaker:'INDY', col:P.PNK, text:'You have THE LOOK again.'},
+    {speaker:'BECK', col:P.TEL, text:"I don't have a look."},
+    {speaker:'INDY', col:P.PNK, text:"You do. The one where you figured something out and you won't tell me."},
+    {choices:[
+      {text:'Say nothing. "I\'m just tired."',
+       pick:['indy','deflect'],
+       jump:'indy_deflect'},
+      {text:'"Something happened. Something big."',
+       pick:['indy','partial'],
+       jump:'indy_partial'},
+      {text:'"You know the East Dock raid on the news?"',
+       pick:['indy','full'],
+       jump:'indy_full'},
+    ], choiceIdx:0},
+    {label:'indy_deflect',
+     speaker:'BECK', col:P.TEL, text:"I'm just tired."},
+    {speaker:'INDY', col:P.PNK, text:"You're the worst liar I've ever met and I've known you seven years."},
+    {speaker:'BECK', col:P.TEL, text:"I know."},{jump:'indy_end'},
+    {label:'indy_partial',
+     speaker:'BECK', col:P.TEL, text:'I was right about something big. I can\'t talk about all of it.'},
+    {speaker:'INDY', col:P.PNK, text:'How big?'},
+    {speaker:'BECK', col:P.TEL, text:"East Dock raid big."},
+    {speaker:'INDY', col:P.PNK, text:'...Beck. That was on the news.'},
+    {speaker:'BECK', col:P.TEL, text:"I know."},{jump:'indy_end'},
+    {label:'indy_full',
+     speaker:'BECK', col:P.TEL, text:"You know the East Dock raid on the news? I found that."},
+    {speaker:'INDY', col:P.PNK, text:'You went ALONE. To an ACTIVE weapons deal. At NIGHT.'},
+    {speaker:'BECK', col:P.TEL, text:'I got the evidence. It worked.'},
+    {speaker:'INDY', col:P.PNK, text:'That is the most Beck thing you have ever done in your life.'},
+    {speaker:'BECK', col:P.TEL, text:"Is that a compliment?"},
+    {speaker:'INDY', col:P.PNK, text:"I genuinely don't know yet."},{jump:'indy_end'},
+    {label:'indy_end',
+     speaker:'INDY', col:P.PNK, text:"There are two weird adults sitting at your lunch table by the way."},
+    {speaker:'BECK', col:P.TEL, text:'...What?'},
+    {speaker:'INDY', col:P.PNK, text:'Head right. Cafeteria. They look government-y.'},
+  ], () => {
+    // Unlock café
+  });
+}
+
+function startRecruitmentDialogue() {
+  startDialogue([
+    {speaker:'STERLING', col:P.LBLU, text:"Rebecca Hawthorne. I'm Deputy Director Sterling. This is Director Kane. We work for a classified program called Project ARGUS."},
+    {speaker:'BECK', col:P.TEL, text:"How did you get into my school?"},
+    {speaker:'STERLING', col:P.LBLU, text:"Authorization from the district. The visit is legitimate."},
+    {speaker:'KANE', col:P.LGRY, text:"Unlike your walk to the East Dock, which was not."},
+    {choices:[
+      {text:'"I don\'t know what you mean."', pick:['lunch1','deny'], jump:'lunch_deny'},
+      {text:'"How long have you known?"',     pick:['lunch1','ask'],  jump:'lunch_ask'},
+      {text:'"Are you here to arrest me?"',   pick:['lunch1','arrest'],jump:'lunch_arrest'},
+    ]},
+    {label:'lunch_deny',
+     speaker:'BECK', col:P.TEL, text:"I don't know what you mean."},
+    {speaker:'KANE', col:P.LGRY, text:"You sent 43 photographs to three federal agencies. Your phone's sensor signature is unique. It wasn't difficult."},{jump:'lunch_pitch'},
+    {label:'lunch_ask',
+     speaker:'BECK', col:P.TEL, text:"How long have you known?"},
+    {speaker:'STERLING', col:P.LBLU, text:"Forty-eight hours after the tip. A week to verify your age."},
+    {speaker:'KANE', col:P.LGRY, text:"Which is when I recommended closing the file."},{jump:'lunch_pitch'},
+    {label:'lunch_arrest',
+     speaker:'BECK', col:P.TEL, text:"Are you here to arrest me?"},
+    {speaker:'STERLING', col:P.LBLU, text:"No."},
+    {speaker:'KANE', col:P.LGRY, text:"Not today."},{jump:'lunch_pitch'},
+    {label:'lunch_pitch',
+     speaker:'STERLING', col:P.LBLU, text:"ARGUS trains exceptional teenagers for intelligence work. You'd work with a team. Real missions. Real stakes."},
+    {speaker:'KANE', col:P.LGRY, text:"For the record — I oppose this program. And I especially oppose recruiting you."},
+    {speaker:'BECK', col:P.TEL, text:"Why?"},
+    {speaker:'KANE', col:P.LGRY, text:"You went to an active criminal operation alone, at night, with no backup and no exit plan."},
+    {speaker:'BECK', col:P.TEL, text:"Something went wrong. I handled it. The weapons are off the street."},
+    {choices:[
+      {text:'"What does ARGUS actually want from me?"',   pick:['pitch','details'], jump:'pitch_details'},
+      {text:'"I was reckless. I was also right. Both."',  pick:['pitch','ownit'],   jump:'pitch_own'},
+      {text:'"My parents will never allow this."',        pick:['pitch','parents'],  jump:'pitch_parents'},
+    ]},
+    {label:'pitch_details',
+     speaker:'STERLING', col:P.LBLU, text:"Right now? Just a conversation. We meet with your parents, full disclosure. They say no, we walk away."},
+    {speaker:'KANE', col:P.LGRY, text:"The work is observation and analysis. No one puts you in danger."},{jump:'final_q'},
+    {label:'pitch_own',
+     speaker:'BECK', col:P.TEL, text:"You're right. I had no exit plan. If the second guard had been faster it would've gone badly."},
+    {speaker:'KANE', col:P.LGRY, text:"..."},
+    {speaker:'BECK', col:P.TEL, text:"And I was right about all of it. Both things are true."},
+    {speaker:'STERLING', col:P.LBLU, text:"..."},{jump:'final_q'},
+    {label:'pitch_parents',
+     speaker:'BECK', col:P.TEL, text:"My parents will never go for this."},
+    {speaker:'KANE', col:P.LGRY, text:"Some parents, when they see what their child is already doing alone, make a different calculation."},{jump:'final_q'},
+    {label:'final_q',
+     speaker:'STERLING', col:P.LBLU, text:"You don't have to decide now."},
+    {speaker:'STERLING', col:P.LBLU, text:"Take this card. Call the number if you're interested."},
+    {speaker:'KANE', col:P.LGRY, text:"One day your refusal to follow orders is going to get someone killed."},
+    {choices:[
+      {text:'"One day following orders blindly will too."',  pick:['final','pushback'], jump:'end_pushback'},
+      {text:'Pick up the card. Say nothing.',               pick:['final','silent'],   jump:'end_silent'},
+      {text:'"I\'ll think about it."',                     pick:['final','maybe'],    jump:'end_maybe'},
+    ]},
+    {label:'end_pushback',
+     speaker:'BECK', col:P.TEL, text:"One day blindly following orders is going to get someone killed."},
+    {speaker:'KANE', col:P.LGRY, text:"..."},{jump:'go_ending'},
+    {label:'end_silent',
+     speaker:'', text:"Beck picks up the card. Doesn't say a word."},{jump:'go_ending'},
+    {label:'end_maybe',
+     speaker:'BECK', col:P.TEL, text:"I'll think about it."},{jump:'go_ending'},
+    {label:'go_ending',
+     speaker:'STERLING', col:P.LBLU, text:"Good luck, Hawthorne."},
+  ], () => { game.state = 'ENDING'; });
+}
+
+// ============================================================
+// DOCK CHASE
+// ============================================================
+function triggerDockChase() {
+  game.dockChaseActive = true;
+  const smuggler = MAPS['dock'].npcs[0];
+  smuggler.active  = true;
+  smuggler.x       = 15 * TW;
+  smuggler.y       = 5  * TH;
+  game.state       = 'DOCK_CHASE';
+}
+
+function updateDockChase() {
+  if (!game.dockChaseActive) return;
+
+  const map  = MAPS['dock'];
+  const smug = map.npcs[0];
+  if (!smug || !smug.active) return;
+
+  // Move smuggler toward player
+  const dx = (pl.x + pl.w/2) - (smug.x + 7);
+  const dy = (pl.y + pl.h/2) - (smug.y + 7);
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
+  if (dist > 4) {
+    const nx = smug.x + (dx/dist) * smug.speed;
+    const ny = smug.y + (dy/dist) * smug.speed;
+    const m  = 2;
+    if (!rectSolid(nx+m, smug.y+m, smug.w-m*2, smug.h-m*2)) smug.x = nx;
+    if (!rectSolid(smug.x+m, ny+m, smug.w-m*2, smug.h-m*2)) smug.y = ny;
+    smug.dir = Math.abs(dx) > Math.abs(dy) ? (dx>0?'right':'left') : (dy>0?'down':'up');
+  }
+
+  if (smug.cooldown > 0) { smug.cooldown--; return; }
+
+  // Collision with player
+  if (
+    Math.abs((pl.x+pl.w/2) - (smug.x+7)) < 12 &&
+    Math.abs((pl.y+pl.h/2) - (smug.y+7)) < 12 &&
+    pl.invincible === 0
+  ) {
+    pl.hearts--;
+    pl.invincible = 80;
+    smug.cooldown = 60;
+    showDamageFlash();
+    if (pl.hearts <= 0) {
+      startDialogue([
+        {speaker:'', text:'CAUGHT! The smuggler grabbed you.'},
+        {speaker:'', text:'Evidence still secured. You manage to break free and run.'},
+        {speaker:'', text:'Try again — reach the EXIT at the top of the dock!'},
+      ], () => {
+        pl.hearts    = 3;
+        pl.x         = MAPS['dock'].playerSpawn.x;
+        pl.y         = MAPS['dock'].playerSpawn.y;
+        smug.x       = 15*TW;
+        smug.y       = 5*TH;
+        smug.cooldown= 0;
+        pl.invincible= 120;
+        game.state   = 'DOCK_CHASE';
+      });
+    }
+    return;
+  }
+
+  // Player reached exit
+  const exitTX = 8, exitTY = 0;
+  const exitX  = exitTX * TW;
+  const exitY  = exitTY * TH;
+  if (pl.x + pl.w > exitX && pl.x < exitX + TW && pl.y < exitY + TH*2) {
+    game.dockChaseActive  = false;
+    smug.active           = false;
+    startDialogue([
+      {speaker:'', text:'You hit the street at full speed.'},
+      {speaker:'BECK', col:P.TEL, text:'All 43 photos intact.'},
+      {speaker:'', text:'You send the evidence to the police, the FBI, and three journalists.'},
+      {speaker:'', text:'Four days later: FEDERAL RAID ON EAST DOCK — $4.2M IN WEAPONS SEIZED.'},
+      {speaker:'', text:'Nobody knows it was you.'},
+      {speaker:'', text:'Two weeks pass. Then something strange happens at school...'},
+    ], () => loadScene('school'));
+    return;
+  }
+
+  updatePlayer(); // allow player movement during chase
+}
+
+let damageFlash = 0;
+function showDamageFlash() { damageFlash = 15; }
+
+// ============================================================
+// HUD
+// ============================================================
+function drawHUD() {
+  if (game.state === 'TITLE' || game.state === 'ENDING') return;
+
+  // Hearts
+  for (let i = 0; i < pl.maxHearts; i++) {
+    const hx = 4 + i * 10;
+    const hy = 4;
+    px(hx, hy, 8, 7, i < pl.hearts ? P.RED : P.DGRY);
+    px(hx+2, hy-1, 2, 1, i < pl.hearts ? P.LRED : '#404040');
+    px(hx+5, hy-1, 2, 1, i < pl.hearts ? P.LRED : '#404040');
+  }
+
+  // Evidence count (only on dock)
+  if (game.mapId === 'dock') {
+    const ev = game.evidenceFound.length;
+    drawText(`EV:${ev}/4`, GW-36, 11, ev >= 4 ? P.YEL : P.LGRY, 6);
+  }
+
+  // Scene name flash
+  if (game.frame < 160) {
+    const map   = MAPS[game.mapId];
+    const label = map.name;
+    const tw2   = label.length * 6;
+    const bx    = Math.floor(GW/2 - tw2/2 - 4);
+    px(bx, GH/2 - 10, tw2+8, 14, P.BLK);
+    px(bx, GH/2 - 10, tw2+8, 2,  P.YEL);
+    drawText(label, bx+4, GH/2+1, P.YEL, 6);
+  }
+
+  // Damage flash overlay
+  if (damageFlash > 0) {
+    ctx.fillStyle = `rgba(220,0,0,${damageFlash/15 * 0.4})`;
+    ctx.fillRect(0, 0, GW, GH);
+    damageFlash--;
+  }
+
+  // Interaction prompt
+  if (game.state === 'EXPLORE') drawInteractPrompt();
+}
+
+function drawInteractPrompt() {
+  const cx  = pl.x + pl.w/2;
+  const cy  = pl.y + pl.h/2;
+  const map = MAPS[game.mapId];
+
+  for (const item of map.items) {
+    const ix = item.tx * TW + TW/2;
+    const iy = item.ty * TH + TH/2;
+    if (Math.abs(cx-ix) < TW*1.5 && Math.abs(cy-iy) < TH*1.5) {
+      const sx = item.tx * TW - cam.x;
+      const sy = item.ty * TH - cam.y;
+      const label = item.label;
+      px(sx-2, sy-14, label.length*5+8, 11, P.BLK);
+      drawText(label, sx, sy-7, P.YEL, 5);
+      return;
+    }
+  }
+
+  for (const npc of map.npcs) {
+    if (!npc.active || npc.id === 'smuggler' || npc.id === 'cafe_arrow') continue;
+    const nx = npc.x + 6;
+    const ny = npc.y + 7;
+    if (Math.abs(cx-nx) < TW*2 && Math.abs(cy-ny) < TH*2) {
+      const sx  = npc.x - cam.x;
+      const sy  = npc.y - cam.y;
+      const label = '[Z] Talk';
+      px(sx, sy-14, 36, 11, P.BLK);
+      drawText(label, sx+2, sy-7, P.YEL, 5);
+      return;
+    }
+  }
+}
+
+// ============================================================
+// CAFETERIA ARROW TRIGGER
+// ============================================================
+function checkCafeArrow() {
+  if (game.mapId !== 'school') return;
+  const arrow = MAPS['school'].npcs.find(n => n.id === 'cafe_arrow');
+  if (!arrow) return;
+  if (pl.x + pl.w > arrow.x - 8 && pl.x < arrow.x + 20) {
+    loadScene('cafeteria');
+  }
+}
+
+// ============================================================
+// PATTERN LOCK MINI-GAME
+// ============================================================
+const puzzle = {
+  active: false,
+  phase: 0,    // 0=puzzle1, 1=puzzle2, 2=anomaly, 3=done
+  round: 0,
+  selected: 0,
+  cluesFound: 0,
+  cluesSel: 0, // which anomaly clue is cursor on
+  answered: false,
+  answerCorrect: false,
+  flashTimer: 0,
+};
+
+const PZ_DATA = [
+  {
+    heading: 'PATTERN LOCK — PUZZLE #3',
+    photo:[
+      'Cobblestone street. Buildings lean over',
+      'the road. German signs with umlauts.',
+      'Blue-white trams. Cathedral spire.',
+      'Late afternoon shadows run WEST.',
+      'Coord: 47.37N, 8.54E',
+    ],
+    opts:['Munich, Germany','Zurich, Switzerland','Vienna, Austria','Prague, Czech Republic'],
+    correct:1,
+    explain:'Coords match Zurich. The blue-white trams confirm it.',
+  },
+  {
+    heading: 'PATTERN LOCK — PUZZLE #7',
+    photo:[
+      'Sun-bleached concrete. Turquoise paint.',
+      'Arabic sign, English below it:',
+      '"PORT AUTHORITY — VEHICLES ONLY"',
+      'Three cargo vessels at anchor.',
+      'Coord: 15.55N, 32.53E',
+    ],
+    opts:['Djibouti City','Khartoum, Sudan','Aden, Yemen','Mogadishu, Somalia'],
+    correct:1,
+    explain:'Coords match Khartoum. Arabic-English signs, Nile port.',
+  },
+];
+
+const ANOMALY_CLUES = [
+  {word:'dock crane', note:'"dock" — names a place, not an object in the photo.'},
+  {word:'east-facing (moon pos)', note:'Wrong. The moon does not indicate east. Deliberate error.'},
+  {word:'late-night unusual op', note:'Describes what is HAPPENING, not what the photo shows.'},
+  {word:'contraband indicators', note:'A caption describing crime? Not a photo caption — a message.'},
+];
+
+function startPuzzleMinigame() {
+  puzzle.active       = true;
+  puzzle.phase        = 0;
+  puzzle.selected     = 0;
+  puzzle.answered     = false;
+  puzzle.cluesFound   = 0;
+  puzzle.cluesSel     = 0;
+  puzzle.flashTimer   = 0;
+  game.state          = 'MINIGAME_PUZZLE';
+}
+
+function updatePuzzle() {
+  if (!puzzle.active) return;
+
+  if (justPressed['KeyZ']) {
+    if (puzzle.phase < 2) {
+      // Location puzzle
+      if (!puzzle.answered) {
+        puzzle.answered      = true;
+        puzzle.answerCorrect = (puzzle.selected === PZ_DATA[puzzle.phase].correct);
+        puzzle.flashTimer    = 80;
+      } else {
+        // Advance phase
+        puzzle.phase++;
+        puzzle.answered   = false;
+        puzzle.selected   = 0;
+        puzzle.flashTimer = 0;
+        if (puzzle.phase === 2) puzzle.cluesSel = 0;
+      }
+    } else if (puzzle.phase === 2) {
+      // Anomaly puzzle
+      if (puzzle.cluesFound < ANOMALY_CLUES.length) {
+        const idx = puzzle.cluesSel;
+        if (idx < ANOMALY_CLUES.length) {
+          puzzle.cluesFound = Math.max(puzzle.cluesFound, idx + 1);
+          if (puzzle.cluesFound >= ANOMALY_CLUES.length) {
+            puzzle.flashTimer = 100;
+          }
+        }
+      } else {
+        // Done — advance to dock
+        puzzle.active = false;
+        game.state    = 'EXPLORE';
+        startDialogue([
+          {speaker:'BECK', col:P.TEL, text:'The coordinates in that photo match the East Dock. 11 PM tonight.'},
+          {speaker:'BECK', col:P.TEL, text:"Someone is using Pattern Lock to send instructions. It's a dead drop."},
+          {choices:[
+            {text:'Call the police first.',     pick:['first','police'],     jump:'police_call'},
+            {text:'Go to the dock right now.',  pick:['first','dock_first'], jump:'go_dock'},
+          ]},
+          {label:'police_call',
+           speaker:'DISPATCH', col:P.LGRY, text:'"Denver PD non-emergency."'},
+          {speaker:'BECK', col:P.TEL, text:'There\'s an illegal weapons shipment at the East Dock tonight. I decoded hidden messages—'},
+          {speaker:'DISPATCH', col:P.LGRY, text:'"How old are you, hon?"'},
+          {speaker:'BECK', col:P.TEL, text:'That is NOT relevant—'},
+          {speaker:'DISPATCH', col:P.LGRY, text:'"Is this for a school project?"'},
+          {speaker:'', text:'They hang up.'},
+          {speaker:'BECK', col:P.TEL, text:'Fine. I\'ll prove it myself.'},{jump:'go_dock'},
+          {label:'go_dock',
+           speaker:'', text:"Beck puts on dark clothes. Leaves a note: 'Went for a ride. Back by midnight.'"},
+          {speaker:'', text:'The East Dock is 20 minutes by bike. It is 10:22 PM.'},
+          {speaker:'', text:'She goes alone.'},
+        ], () => loadScene('dock'));
+      }
+    }
+  }
+
+  if (puzzle.phase < 2 && !puzzle.answered) {
+    if (justPressed['ArrowUp'])   puzzle.selected = Math.max(0, puzzle.selected-1);
+    if (justPressed['ArrowDown'])  puzzle.selected = Math.min(3, puzzle.selected+1);
+  } else if (puzzle.phase === 2 && puzzle.cluesFound < ANOMALY_CLUES.length) {
+    if (justPressed['ArrowUp'])   puzzle.cluesSel = Math.max(0, puzzle.cluesSel-1);
+    if (justPressed['ArrowDown'])  puzzle.cluesSel = Math.min(ANOMALY_CLUES.length-1, puzzle.cluesSel+1);
+  }
+
+  if (puzzle.flashTimer > 0) puzzle.flashTimer--;
+}
+
+function drawPuzzle() {
+  if (!puzzle.active) return;
+
+  // Dark overlay
+  ctx.fillStyle = '#000000CC';
+  ctx.fillRect(0, 0, GW, GH);
+
+  // Screen frame
+  const bx=10, by=10, bw=GW-20, bh=GH-20;
+  px(bx, by, bw, bh, '#0A0A18');
+  px(bx, by, bw, 2, P.TEL);
+  px(bx, by+bh-2, bw, 2, P.TEL);
+  px(bx, by, 2, bh, P.TEL);
+  px(bx+bw-2, by, 2, bh, P.TEL);
+
+  // PATTERN LOCK header
+  px(bx+2, by+2, bw-4, 12, '#101828');
+  drawText('PATTERN LOCK', bx+8, by+11, P.TEL, 6);
+  drawText('WEEK 47', bx+bw-50, by+11, P.YEL, 6);
+
+  if (puzzle.phase < 2) {
+    // Location puzzle
+    const pz = PZ_DATA[puzzle.phase];
+    drawText(pz.heading, bx+8, by+24, P.LGRY, 5);
+
+    // Photo frame
+    px(bx+8, by+30, bw-16, 60, '#050510');
+    px(bx+8, by+30, bw-16, 1, '#333350');
+    px(bx+8, by+89, bw-16, 1, '#333350');
+    pz.photo.forEach((line, i) => {
+      drawText(line, bx+12, by+42+i*10, P.LGRY, 5);
+    });
+
+    // Options
+    drawText('WHERE WAS THIS TAKEN?', bx+8, by+100, P.WHT, 5);
+    pz.opts.forEach((opt, i) => {
+      const oy  = by + 111 + i * 14;
+      const sel = i === puzzle.selected;
+      if (puzzle.answered) {
+        const correct = i === pz.correct;
+        px(bx+10, oy-7, bw-20, 11,
+          correct ? '#002800' : (sel && !correct ? '#280000' : '#101018'));
+        drawText(opt, bx+22, oy, correct ? P.LGRN : (sel&&!correct?P.LRED:P.GRY), 5);
+        if (correct) drawText('✓', bx+14, oy, P.LGRN, 5);
+      } else {
+        if (sel) px(bx+10, oy-7, bw-20, 11, '#0C1828');
+        drawText((sel ? '▶ ' : '  ') + opt, bx+14, oy, sel ? P.YEL : P.LGRY, 5);
+      }
+    });
+
+    if (puzzle.answered) {
+      const note = puzzle.answerCorrect ? 'CORRECT! ' + pz.explain : 'Beck already knows. She clicks the right answer.';
+      drawWrappedText(note, bx+10, by+172, bw-20, puzzle.answerCorrect ? P.LGRN : P.YEL, 5);
+      if (puzzle.flashTimer <= 0) drawText('[Z] NEXT', bx+bw-50, by+hh-14, P.YEL, 5);
+    } else {
+      drawText('[↑↓] SELECT  [Z] CONFIRM', bx+8, by+hh-14, P.GRY, 5);
+    }
+  } else if (puzzle.phase === 2) {
+    // Anomaly puzzle
+    drawText('PUZZLE #11 — SOMETHING IS WRONG', bx+8, by+24, P.YEL, 5);
+
+    // Photo description
+    const photoLines = [
+      'A container shipping yard at night.',
+      'Dock crane visible at far right.',
+      'Water east-facing (moon position).',
+      'Late-night unusual operation.',
+      'Possible contraband indicators.',
+      'COORD: 39.73N, 104.99W  TIME: 23:00',
+    ];
+    px(bx+8, by+30, bw-16, 70, '#050510');
+    photoLines.forEach((l, i) => {
+      const isClue = i >= 1 && i <= 4;
+      const clueIdx = i - 1;
+      const found   = clueIdx < puzzle.cluesFound;
+      const selected = clueIdx === puzzle.cluesSel;
+      let col = P.LGRY;
+      if (isClue && found)    col = P.LGRN;
+      else if (isClue && selected) col = P.YEL;
+      else if (isClue) col = P.AMB;
+      if (isClue && !found && Math.floor(game.frame/20)%2===0) col = P.YEL;
+      drawText(l, bx+12, by+42+i*10, col, 5);
+    });
+
+    drawText('FIND THE 4 HIDDEN SIGNALS:', bx+8, by+106, P.WHT, 5);
+
+    if (puzzle.cluesFound < ANOMALY_CLUES.length) {
+      const note = ANOMALY_CLUES[puzzle.cluesSel];
+      drawText('▶ ' + note.word, bx+12, by+116, P.YEL, 5);
+      drawWrappedText(note.note, bx+12, by+127, bw-24, P.LGRY, 5);
+      drawText(`Found: ${puzzle.cluesFound} / 4`, bx+8, by+160, P.AMB, 5);
+      drawText('[↑↓] SELECT ANOMALY  [Z] MARK SUSPICIOUS', bx+8, by+hh-14, P.GRY, 5);
+    } else {
+      if (puzzle.flashTimer > 0) {
+        px(bx+10, by+110, bw-20, 70, '#001800');
+        drawText('ALL SIGNALS DECODED', bx+30, by+130, P.LGRN, 6);
+        drawText('EAST DOCK — 11 PM TONIGHT', bx+20, by+145, P.YEL, 6);
+        drawText('ILLEGAL ARMS SHIPMENT', bx+28, by+158, P.RED, 5);
+      }
+      if (puzzle.flashTimer <= 0 || puzzle.flashTimer < 50)
+        drawText('[Z] CONTINUE', bx+bw-72, by+hh-14, P.YEL, 5);
+    }
+  }
+}
+
+// ============================================================
+// TITLE SCREEN
+// ============================================================
+function drawTitle() {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  // Stars
+  const stars = [[20,15],[80,8],[140,20],[200,12],[240,30],
+                  [40,50],[160,45],[220,55],[100,60],[30,80]];
+  stars.forEach(([sx,sy]) => {
+    const b = (Math.floor(game.frame/30) + Math.floor(sx/40)) % 2;
+    px(sx, sy, 1, 1, b ? P.WHT : P.GRY);
+  });
+
+  // Title box
+  px(20, 60, GW-40, 70, '#08081C');
+  px(20, 60, GW-40, 2, P.TEL);
+  px(20, 130, GW-40, 2, P.TEL);
+  px(20, 60, 2, 70, P.TEL);
+  px(GW-22, 60, 2, 70, P.TEL);
+
+  drawText('BECK  HAWTHORNE', 38, 82, P.WHT, 8);
+  drawText('ORIGIN', 92, 98, P.TEL, 8);
+  px(38, 104, GW-76, 1, P.TEL);
+  drawText('PROJECT  ARGUS', 52, 116, P.YEL, 6);
+  drawText('CHAPTER ONE:  PATTERN', 54, 126, P.GRY, 5);
+
+  if (Math.floor(game.frame/25)%2===0)
+    drawText('PRESS  Z  TO  START', 68, 160, P.WHT, 6);
+
+  drawText('ARROW KEYS: MOVE     Z: INTERACT', 30, 185, P.DGRY, 5);
+  drawText('X: SKIP     EXPLORE EVERYTHING', 34, 195, P.DGRY, 5);
+
+  // NES copyright style
+  drawText('© BECK HAWTHORNE: ORIGIN  2024', 30, 225, '#303030', 5);
+
+  if (justPressed['KeyZ'] || justPressed['KeyX'] || justPressed['Space']) {
+    loadScene('bedroom');
+  }
+}
+
+// ============================================================
+// ENDING SCREEN
+// ============================================================
+function drawEnding() {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  px(10, 10, GW-20, GH-20, '#080818');
+  px(10, 10, GW-20, 2, P.YEL);
+  px(10, GH-12, GW-20, 2, P.YEL);
+
+  drawText('CHAPTER ONE COMPLETE', 36, 32, P.YEL, 6);
+  px(20, 37, GW-40, 1, P.DGRY);
+
+  const choice = game.choices['final'] || 'silent';
+  const lines = {
+    pushback:[
+      '"One day blindly following',
+      'orders gets someone killed."',
+      '',
+      "Kane doesn't answer.",
+      'Beck picks up the card.',
+    ],
+    silent:[
+      'Beck picks up the card.',
+      'Says nothing.',
+      '',
+      'Sometimes silence is',
+      'the loudest answer.',
+    ],
+    maybe:[
+      '"I\'ll think about it."',
+      '',
+      'She calls three days later.',
+      'At midnight.',
+      'She tells herself it\'s',
+      'just a phone call.',
+    ],
+  }[choice];
+
+  lines.forEach((l, i) => {
+    drawText(l, 30, 56 + i * 13, P.WHT, 6);
+  });
+
+  px(20, 145, GW-40, 1, P.DGRY);
+  drawText('Three days later:', 30, 160, P.GRY, 5);
+  drawText('She calls the number.', 30, 172, P.TEL, 6);
+  drawText('Two days after that:', 30, 186, P.GRY, 5);
+  drawText('Her grandfather says yes.', 30, 198, P.WHT, 6);
+
+  px(20, 208, GW-40, 1, P.DGRY);
+  if (Math.floor(game.frame/30)%2===0)
+    drawText('CHAPTER TWO: TEAM — COMING SOON', 18, 226, P.YEL, 5);
+
+  if (justPressed['KeyZ'])
+    restartGame();
+}
+
+// ============================================================
+// SCENE LOADING
+// ============================================================
+function loadScene(mapId) {
+  game.mapId          = mapId;
+  game.dockChaseActive = false;
+  game.state          = 'EXPLORE';
+  game.frame          = 0;
+
+  const map = MAPS[mapId];
+  pl.x     = map.playerSpawn.x;
+  pl.y     = map.playerSpawn.y;
+  pl.hearts = Math.min(pl.maxHearts, pl.hearts + 1); // restore 1 heart on scene change
+  pl.invincible = 60;
+  updateCam();
+}
+
+function restartGame() {
+  Object.assign(game, {
+    state:'TITLE', frame:0, mapId:'bedroom',
+    evidenceFound:[], choices:{}, dockChaseActive:false,
+  });
+  Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
+  // Reset dock npcs
+  MAPS['dock'].npcs.forEach(n => { n.active=false; n.x=15*TW; n.y=5*TH; });
+  game.frame = 0;
+}
+
+// puzzle box inner height constant
+const hh = GH - 20;
+
+// ============================================================
+// MAIN GAME LOOP
+// ============================================================
+function loop() {
+  game.frame++;
+
+  // --- UPDATE ---
+  switch (game.state) {
+    case 'TITLE':
+      break;
+    case 'EXPLORE':
+      updatePlayer();
+      checkInteract();
+      checkCafeArrow();
+      updateCam();
+      break;
+    case 'DIALOGUE':
+      updateDialogue();
+      break;
+    case 'MINIGAME_PUZZLE':
+      updatePuzzle();
+      break;
+    case 'DOCK_CHASE':
+      updatePlayer();
+      updateDockChase();
+      checkInteract();
+      updateCam();
+      break;
+    case 'ENDING':
+      break;
+  }
+
+  // Clear justPressed
+  for (const k in justPressed) delete justPressed[k];
+
+  // --- DRAW ---
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  if (game.state === 'TITLE') {
+    drawTitle();
+  } else if (game.state === 'ENDING') {
+    drawEnding();
+  } else {
+    drawMap();
+
+    // Draw NPCs
+    const map = MAPS[game.mapId];
+    map.npcs.forEach(drawNPC);
+
+    // Draw player (not during pure cutscene)
+    drawPlayer();
+
+    // Dialogue box
+    drawDialogueBox();
+
+    // Puzzle overlay
+    if (game.state === 'MINIGAME_PUZZLE') drawPuzzle();
+
+    drawHUD();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+restartGame();
+game.state = 'TITLE';
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
