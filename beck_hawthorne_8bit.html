@@ -569,31 +569,21 @@ function drawBeck(sx, sy, dir, fr) {
     r(3,9,1,1,S2); r(10,9,1,1,S2);
 
     if (dir === 'down') {
-      // Eyebrows — spread wide so they sit clearly above each eye
-      r(3,4, 3,1, LB); r(8,4, 3,1, LB);
+      // Eyebrows — 2px each, inset from edges, clear gap between
+      r(4,4, 2,1, LB); r(8,4, 2,1, LB);
 
-      // Left eye (x=3-5) — 2-pixel nose bridge gap before right eye
-      r(3,5, 3,3, EW);           // white base (3×3)
-      r(3,5, 3,1, HC);           // top lash line
-      r(4,6, 1,1, '#2A1005');   // iris+pupil
-      r(5,6, 1,1, EY);           // iris right edge (warmth)
-      r(3,7, 1,1, EY);           // lower iris left
-      // catchlight — bright speck at top of iris
-      r(3,6, 1,1, '#FFFFFF');
+      // Left eye (x=4-5, 2px wide)
+      r(4,5, 2,3, EW);         // eye white
+      r(4,5, 2,1, HC);         // top lash
+      r(4,6, 1,1, EY);         // brown iris
 
-      // Right eye (x=8-10) — clear 2px gap (x=6-7) between eyes
-      r(8,5, 3,3, EW);
-      r(8,5, 3,1, HC);
-      r(9,6, 1,1, '#2A1005');
-      r(10,6, 1,1, EY);
-      r(8,7, 1,1, EY);
-      r(8,6, 1,1, '#FFFFFF');    // catchlight
+      // Right eye (x=8-9, 2px wide — clear 2px nose bridge at x=6-7)
+      r(8,5, 2,3, EW);
+      r(8,5, 2,1, HC);
+      r(8,6, 1,1, EY);
 
-      // Nose bridge skin is x=6-7 (natural gap between eyes)
-      r(6,8, 2,1, S2);           // nose shadow
-
-      // Mouth
-      r(5,9, 4,1, '#C07878');
+      r(6,8, 2,1, S2);          // nose shadow
+      r(5,9, 4,1, '#C07878');  // mouth
       r(6,9, 2,1, '#D89898');
 
     } else if (dir === 'left') {
@@ -1401,100 +1391,108 @@ function drawPuzzle() {
   ctx.fillStyle = '#000000CC';
   ctx.fillRect(0, 0, GW, GH);
 
-  // Screen frame
-  const bx=10, by=10, bw=GW-20, bh=GH-20;
-  px(bx, by, bw, bh, '#0A0A18');
+  // Screen frame — slightly larger than before for more room
+  const bx=6, by=6, bw=GW-12, bh=GH-12;
+  px(bx, by, bw, bh, '#08081C');
   px(bx, by, bw, 2, P.TEL);
   px(bx, by+bh-2, bw, 2, P.TEL);
   px(bx, by, 2, bh, P.TEL);
   px(bx+bw-2, by, 2, bh, P.TEL);
 
-  // PATTERN LOCK header
-  px(bx+2, by+2, bw-4, 12, '#101828');
-  drawText('PATTERN LOCK', bx+8, by+11, P.TEL, 6);
-  drawText('WEEK 47', bx+bw-50, by+11, P.YEL, 6);
+  // Header bar
+  px(bx+2, by+2, bw-4, 15, '#0C1826');
+  drawText('PATTERN LOCK', bx+8, by+13, P.TEL, 8);
+  drawText('WEEK 47', bx+bw-58, by+13, P.YEL, 8);
 
   if (puzzle.phase < 2) {
-    // Location puzzle
     const pz = PZ_DATA[puzzle.phase];
-    drawText(pz.heading, bx+8, by+24, P.LGRY, 5);
+    drawText(pz.heading, bx+8, by+27, '#8899AA', 7);
 
-    // Photo frame
-    px(bx+8, by+30, bw-16, 60, '#050510');
-    px(bx+8, by+30, bw-16, 1, '#333350');
-    px(bx+8, by+89, bw-16, 1, '#333350');
+    // Photo box
+    px(bx+6, by+31, bw-12, 68, '#040412');
+    px(bx+6, by+31, bw-12, 1, '#334466');
+    px(bx+6, by+98, bw-12, 1, '#334466');
     pz.photo.forEach((line, i) => {
-      drawText(line, bx+12, by+42+i*10, P.LGRY, 5);
+      drawText(line, bx+10, by+44+i*12, '#C0D0E0', 7);
     });
 
-    // Options
-    drawText('WHERE WAS THIS TAKEN?', bx+8, by+100, P.WHT, 5);
+    drawText('WHERE WAS THIS TAKEN?', bx+8, by+110, P.WHT, 8);
+
     pz.opts.forEach((opt, i) => {
-      const oy  = by + 111 + i * 14;
+      const oy  = by + 125 + i * 16;
       const sel = i === puzzle.selected;
       if (puzzle.answered) {
         const correct = i === pz.correct;
-        px(bx+10, oy-7, bw-20, 11,
-          correct ? '#002800' : (sel && !correct ? '#280000' : '#101018'));
-        drawText(opt, bx+22, oy, correct ? P.LGRN : (sel&&!correct?P.LRED:P.GRY), 5);
-        if (correct) drawText('✓', bx+14, oy, P.LGRN, 5);
+        px(bx+6, oy-9, bw-12, 13,
+          correct ? '#003800' : (sel && !correct ? '#3A0000' : '#10101C'));
+        drawText(opt, bx+22, oy, correct ? P.LGRN : (sel&&!correct ? P.LRED : '#777788'), 7);
+        if (correct) drawText('✓', bx+12, oy, P.LGRN, 8);
       } else {
-        if (sel) px(bx+10, oy-7, bw-20, 11, '#0C1828');
-        drawText((sel ? '▶ ' : '  ') + opt, bx+14, oy, sel ? P.YEL : P.LGRY, 5);
+        if (sel) px(bx+6, oy-9, bw-12, 13, '#0C1C3C');
+        drawText((sel ? '▶ ' : '  ') + opt, bx+12, oy, sel ? P.YEL : '#9999BB', 7);
       }
     });
 
     if (puzzle.answered) {
-      const note = puzzle.answerCorrect ? 'CORRECT! ' + pz.explain : 'Beck already knows. She clicks the right answer.';
-      drawWrappedText(note, bx+10, by+172, bw-20, puzzle.answerCorrect ? P.LGRN : P.YEL, 5);
-      if (puzzle.flashTimer <= 0) drawText('[Z] NEXT', bx+bw-50, by+hh-14, P.YEL, 5);
+      const note = puzzle.answerCorrect
+        ? 'CORRECT! ' + pz.explain
+        : 'Beck already knows the answer.';
+      drawWrappedText(note, bx+10, by+193, bw-20,
+        puzzle.answerCorrect ? P.LGRN : P.YEL, 7);
+      if (puzzle.flashTimer <= 0)
+        drawText('[Z] NEXT', bx+bw-60, by+bh-10, P.YEL, 7);
     } else {
-      drawText('[↑↓] SELECT  [Z] CONFIRM', bx+8, by+hh-14, P.GRY, 5);
+      drawText('[↑↓] SELECT   [Z] CONFIRM', bx+8, by+bh-10, '#668899', 7);
     }
-  } else if (puzzle.phase === 2) {
-    // Anomaly puzzle
-    drawText('PUZZLE #11 — SOMETHING IS WRONG', bx+8, by+24, P.YEL, 5);
 
-    // Photo description
+  } else {
+    // Anomaly puzzle
+    drawText('PUZZLE #11 — SOMETHING IS WRONG', bx+8, by+27, P.YEL, 7);
+
     const photoLines = [
-      'A container shipping yard at night.',
+      'Container shipping yard at night.',
       'Dock crane visible at far right.',
       'Water east-facing (moon position).',
       'Late-night unusual operation.',
       'Possible contraband indicators.',
-      'COORD: 39.73N, 104.99W  TIME: 23:00',
+      'COORD: 39.73N 104.99W   TIME: 23:00',
     ];
-    px(bx+8, by+30, bw-16, 70, '#050510');
+    px(bx+6, by+31, bw-12, 78, '#040412');
+    px(bx+6, by+31, bw-12, 1, '#334466');
+    px(bx+6, by+108, bw-12, 1, '#334466');
     photoLines.forEach((l, i) => {
-      const isClue = i >= 1 && i <= 4;
+      const isClue  = i >= 1 && i <= 4;
       const clueIdx = i - 1;
-      const found   = clueIdx < puzzle.cluesFound;
-      const selected = clueIdx === puzzle.cluesSel;
-      let col = P.LGRY;
-      if (isClue && found)    col = P.LGRN;
-      else if (isClue && selected) col = P.YEL;
-      else if (isClue) col = P.AMB;
-      if (isClue && !found && Math.floor(game.frame/20)%2===0) col = P.YEL;
-      drawText(l, bx+12, by+42+i*10, col, 5);
+      const found   = isClue && clueIdx < puzzle.cluesFound;
+      const sel     = isClue && clueIdx === puzzle.cluesSel;
+      let col = '#C0D0E0';
+      if (isClue) {
+        if (found)      col = P.LGRN;
+        else if (sel)   col = P.YEL;
+        else            col = P.AMB;
+        if (!found && sel && Math.floor(game.frame/20)%2===0) col = '#FFFFFF';
+      }
+      drawText(l, bx+10, by+44+i*12, col, 7);
     });
 
-    drawText('FIND THE 4 HIDDEN SIGNALS:', bx+8, by+106, P.WHT, 5);
+    drawText('FIND THE 4 HIDDEN SIGNALS:', bx+8, by+120, P.WHT, 8);
 
     if (puzzle.cluesFound < ANOMALY_CLUES.length) {
       const note = ANOMALY_CLUES[puzzle.cluesSel];
-      drawText('▶ ' + note.word, bx+12, by+116, P.YEL, 5);
-      drawWrappedText(note.note, bx+12, by+127, bw-24, P.LGRY, 5);
-      drawText(`Found: ${puzzle.cluesFound} / 4`, bx+8, by+160, P.AMB, 5);
-      drawText('[↑↓] SELECT ANOMALY  [Z] MARK SUSPICIOUS', bx+8, by+hh-14, P.GRY, 5);
+      drawText('▶  ' + note.word, bx+10, by+136, P.YEL, 8);
+      drawWrappedText(note.note, bx+10, by+150, bw-20, '#B0C0D0', 7);
+      drawText('Signals found: ' + puzzle.cluesFound + ' / 4',
+        bx+8, by+192, P.AMB, 7);
+      drawText('[↑↓] PICK   [Z] MARK', bx+8, by+bh-10, '#668899', 7);
     } else {
       if (puzzle.flashTimer > 0) {
-        px(bx+10, by+110, bw-20, 70, '#001800');
-        drawText('ALL SIGNALS DECODED', bx+30, by+130, P.LGRN, 6);
-        drawText('EAST DOCK — 11 PM TONIGHT', bx+20, by+145, P.YEL, 6);
-        drawText('ILLEGAL ARMS SHIPMENT', bx+28, by+158, P.RED, 5);
+        px(bx+10, by+112, bw-20, 82, '#001400');
+        drawText('ALL SIGNALS DECODED!', bx+22, by+136, P.LGRN, 8);
+        drawText('EAST DOCK — 11 PM TONIGHT', bx+14, by+153, P.YEL, 8);
+        drawText('ILLEGAL ARMS SHIPMENT', bx+22, by+169, P.RED, 8);
       }
       if (puzzle.flashTimer <= 0 || puzzle.flashTimer < 50)
-        drawText('[Z] CONTINUE', bx+bw-72, by+hh-14, P.YEL, 5);
+        drawText('[Z] CONTINUE', bx+bw-84, by+bh-10, P.YEL, 7);
     }
   }
 }
