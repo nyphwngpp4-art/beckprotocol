@@ -17,8 +17,6 @@ body {
   touch-action:none;
 }
 canvas#c {
-  image-rendering:pixelated;
-  image-rendering:crisp-edges;
   display:block;
 }
 #hint {
@@ -45,12 +43,9 @@ const SCALE = Math.max(2, Math.min(4,
   Math.floor(Math.min(window.innerWidth / GW, (window.innerHeight - 30) / GH))
 ));
 const cvs = document.getElementById('c');
-cvs.width  = GW;
-cvs.height = GH;
-cvs.style.width  = GW * SCALE + 'px';
-cvs.style.height = GH * SCALE + 'px';
+cvs.width  = GW * SCALE;
+cvs.height = GH * SCALE;
 const ctx = cvs.getContext('2d');
-ctx.imageSmoothingEnabled = false;
 
 // --- PALETTE ---
 const P = {
@@ -1877,6 +1872,7 @@ function loop() {
   }
 
   // --- DRAW ---
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, GW, GH);
 
