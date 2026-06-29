@@ -569,25 +569,28 @@ function drawBeck(sx, sy, dir, fr) {
     r(3,9,1,1,S2); r(10,9,1,1,S2);
 
     if (dir === 'down') {
-      // Eyebrows (brown, slightly arched)
-      r(4,4, 3,1, LB); r(7,4, 3,1, LB);
+      // Eyebrows — spread wide so they sit clearly above each eye
+      r(3,4, 3,1, LB); r(8,4, 3,1, LB);
 
-      // Left eye
-      r(4,5, 3,3, EW);           // white
-      r(4,5, 3,1, HC);           // lash line
-      r(5,6, 1,2, EY);           // brown iris
-      r(5,6, 1,1, '#000');       // pupil
-      r(6,7, 1,1, EW);           // catchlight
+      // Left eye (x=3-5) — 2-pixel nose bridge gap before right eye
+      r(3,5, 3,3, EW);           // white base (3×3)
+      r(3,5, 3,1, HC);           // top lash line
+      r(4,6, 1,1, '#2A1005');   // iris+pupil
+      r(5,6, 1,1, EY);           // iris right edge (warmth)
+      r(3,7, 1,1, EY);           // lower iris left
+      // catchlight — bright speck at top of iris
+      r(3,6, 1,1, '#FFFFFF');
 
-      // Right eye
-      r(7,5, 3,3, EW);
-      r(7,5, 3,1, HC);
-      r(8,6, 1,2, EY);
-      r(8,6, 1,1, '#000');
-      r(9,7, 1,1, EW);
+      // Right eye (x=8-10) — clear 2px gap (x=6-7) between eyes
+      r(8,5, 3,3, EW);
+      r(8,5, 3,1, HC);
+      r(9,6, 1,1, '#2A1005');
+      r(10,6, 1,1, EY);
+      r(8,7, 1,1, EY);
+      r(8,6, 1,1, '#FFFFFF');    // catchlight
 
-      // Nose
-      r(6,8, 2,1, S2);
+      // Nose bridge skin is x=6-7 (natural gap between eyes)
+      r(6,8, 2,1, S2);           // nose shadow
 
       // Mouth
       r(5,9, 4,1, '#C07878');
@@ -671,12 +674,12 @@ function drawNPCChar(sx, sy, npc, fr) {
   // Face
   r(3,2, 8,9, P.SKN);
   r(3,2, 8,1, hA);        // hairline
-  r(4,4, 3,1, hA);        // brows
-  r(7,4, 3,1, hA);
-  r(4,5, 3,2, '#F0F0E8'); // eyes
-  r(7,5, 3,2, '#F0F0E8');
-  r(5,6, 1,1, col);       // iris (matches NPC colour)
-  r(8,6, 1,1, col);
+  r(3,4, 3,1, hA);        // left brow
+  r(8,4, 3,1, hA);        // right brow
+  r(3,5, 3,2, '#F0F0E8'); // left eye (x=3-5)
+  r(8,5, 3,2, '#F0F0E8'); // right eye (x=8-10) — 2px gap between
+  r(4,6, 1,1, col);       // left iris
+  r(9,6, 1,1, col);       // right iris
   r(5,9, 4,1, '#C08070'); // mouth
 
   // Neck
