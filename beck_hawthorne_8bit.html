@@ -507,69 +507,231 @@ function drawDialogueBox() {
 // ============================================================
 // SPRITES
 // ============================================================
-function drawChar(cx, cy, col, dir, fr, size) {
-  // cx, cy in game px (already camera-adjusted)
-  const s = size || 1;
-  const blink = pl.invincible > 0 && Math.floor(game.frame / 4) % 2;
+// ============================================================
+// BECK SPRITE  — 14px wide × 30px tall
+// Long brown hair, brown eyes, teal hoodie, blue jeans
+// ============================================================
+function drawBeck(sx, sy, dir, fr) {
+  if (pl.invincible > 0 && Math.floor(game.frame / 4) % 2) return;
 
-  if (blink) return; // flicker when invincible
-
-  // hair
-  px(cx+3*s, cy,    10*s, 4*s,  '#3C2400');
-  // face
-  px(cx+3*s, cy+3*s, 10*s, 5*s, P.SKN);
-  // eyes
-  const ex = dir==='left' ? cx+3*s : dir==='right' ? cx+9*s : cx+5*s;
-  const ex2 = dir==='right' ? cx+9*s : cx+9*s;
-  if (dir !== 'up') {
-    px(cx+4*s, cy+5*s, 2*s, 2*s, '#1C0800');
-    px(cx+10*s,cy+5*s, 2*s, 2*s, '#1C0800');
+  function r(x, y, w, h, c) {
+    ctx.fillStyle = c;
+    ctx.fillRect(sx + x, sy + y, w, h);
   }
-  // body
-  px(cx+2*s, cy+8*s,  12*s, 5*s, col);
-  // arms (animated)
-  const aOff = fr === 0 ? 0 : 1*s;
-  px(cx,     cy+8*s+aOff,  2*s, 4*s, col);
-  px(cx+14*s,cy+8*s-aOff, 2*s, 4*s, col);
-  // legs
-  const lOff = fr === 0 ? 0 : 1*s;
-  px(cx+3*s, cy+13*s,  4*s, 3*s, '#1848A0');
-  px(cx+9*s, cy+13*s,  4*s, 3*s, '#1848A0');
-  if (fr === 0) { px(cx+3*s,cy+14*s,4*s,1*s,'#1848A0'); }
-  else          { px(cx+9*s,cy+14*s,4*s,1*s,'#1848A0'); }
-  // shoes
-  px(cx+2*s, cy+15*s, 5*s, 1*s, '#2C1408');
-  px(cx+9*s, cy+15*s, 5*s, 1*s, '#2C1408');
+
+  // colour palette
+  const HA = '#6C4018'; // hair brown (mid)
+  const HB = '#8C5820'; // hair highlight
+  const HC = '#3C2008'; // hair shadow / dark
+  const SK = '#F0B090'; // skin
+  const S2 = '#D8987A'; // skin shadow
+  const EY = '#4C2A0A'; // iris (warm dark brown)
+  const EW = '#F8F8F0'; // eye white
+  const LB = '#5C3210'; // eyebrow
+  const HO = '#009888'; // hoodie teal
+  const HS = '#006858'; // hoodie shadow
+  const JN = '#2858B0'; // jeans
+  const JS = '#18387A'; // jeans seam
+  const SH = '#281A08'; // shoes dark
+
+  // ── LONG HAIR (drawn first — behind everything) ──────────
+  // Crown / top
+  r(3,0,  8,2, HA);
+  r(2,1, 10,1, HA);
+  r(5,0,  4,1, HB);   // centre-part highlight
+
+  // Hair curtains — fall all the way to mid-torso (row 22)
+  // This is what makes the "long" read clearly
+  r(0, 2,  3, 21, HA);   // left curtain
+  r(11,2,  3, 21, HA);   // right curtain
+  r(1, 3,  1, 16, HB);   // left strand highlight
+  r(12,3,  1, 16, HB);   // right strand highlight
+  r(0,17,  2,  6, HC);   // lower shadow — left
+  r(12,17, 2,  6, HC);   // lower shadow — right
+
+  // Wavy hair ends at bottom
+  r(0,23,  2,2, HA); r(2,24,1,1, HC);
+  r(12,23, 2,2, HA); r(11,24,1,1, HC);
+
+  // ── FACE / HEAD ─────────────────────────────────────────
+  if (dir === 'up') {
+    // Back of head — only hair visible
+    r(3,2, 8,9, HA);
+    r(4,3, 6,6, HC);
+    r(5,4, 4,3, HB);
+  } else {
+    // Face (sits inside the hair curtains)
+    r(3,2, 8,9, SK);
+    r(3,2, 8,1, HA);   // hairline
+    r(4,2, 6,1, SK);   // forehead shows through part
+
+    // Jaw shading
+    r(3,9,1,1,S2); r(10,9,1,1,S2);
+
+    if (dir === 'down') {
+      // Eyebrows (brown, slightly arched)
+      r(4,4, 3,1, LB); r(7,4, 3,1, LB);
+
+      // Left eye
+      r(4,5, 3,3, EW);           // white
+      r(4,5, 3,1, HC);           // lash line
+      r(5,6, 1,2, EY);           // brown iris
+      r(5,6, 1,1, '#000');       // pupil
+      r(6,7, 1,1, EW);           // catchlight
+
+      // Right eye
+      r(7,5, 3,3, EW);
+      r(7,5, 3,1, HC);
+      r(8,6, 1,2, EY);
+      r(8,6, 1,1, '#000');
+      r(9,7, 1,1, EW);
+
+      // Nose
+      r(6,8, 2,1, S2);
+
+      // Mouth
+      r(5,9, 4,1, '#C07878');
+      r(6,9, 2,1, '#D89898');
+
+    } else if (dir === 'left') {
+      r(3,4, 2,1, LB);           // brow
+      r(3,5, 3,2, EW);           // eye
+      r(3,5, 3,1, HC);           // lash
+      r(4,6, 1,1, EY);           // iris
+      r(3,8, 2,1, S2);           // nose
+      r(3,9, 3,1, '#C07878');    // mouth
+
+    } else {                      // right
+      r(9,4, 2,1, LB);
+      r(8,5, 3,2, EW);
+      r(8,5, 3,1, HC);
+      r(9,6, 1,1, EY);
+      r(9,8, 2,1, S2);
+      r(8,9, 3,1, '#C07878');
+    }
+  }
+
+  // ── NECK ────────────────────────────────────────────────
+  if (dir !== 'up') r(5,11, 4,2, SK);
+
+  // ── HOODIE (teal) ────────────────────────────────────────
+  r(5,12, 4,1, HS);     // collar
+  r(3,13, 8,8, HO);     // torso
+  r(6,13, 2,8, HS);     // centre seam / zip
+  r(3,19, 8,2, HS);     // hem band
+
+  // Arms — alternate swing with walk frame
+  const aO = fr ? 1 : 0;
+  r(1, 13-aO, 2,8, HO);   // left arm
+  r(11,13+aO, 2,8, HO);   // right arm
+  r(1, 20-aO, 2,2, SK);   // left hand
+  r(11,20+aO, 2,2, SK);   // right hand
+
+  // ── JEANS ───────────────────────────────────────────────
+  r(3,21, 8,4, JN);
+  r(6,21, 2,4, JS);
+
+  // Legs — stride animation
+  const lO = fr ? 1 : 0;
+  r(3, 24, 3, 4+lO,   JN);
+  r(8, 24, 3, 4-lO+1, JN);
+
+  // ── SHOES ───────────────────────────────────────────────
+  r(2, 27+lO, 5, 2, SH);
+  r(7, 28-lO, 5, 2, SH);
+}
+
+// ── NPC sprites (simpler but distinct) ──────────────────────
+function drawNPCChar(sx, sy, npc, fr) {
+  function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
+
+  const id  = npc.id;
+  const col = npc.col;
+
+  // Hair / head colour per character
+  const hairMap = {
+    indy:     ['#C85820','#E87840'], // Indy — auburn short hair
+    sterling: ['#1C1C1C','#383838'], // Sterling — dark/grey suit
+    kane:     ['#808080','#A0A0A0'], // Kane — silver hair
+    smuggler: ['#1C1C1C','#000000'], // Smuggler — dark
+  };
+  const [hA, hB] = hairMap[id] || ['#3C2400','#5C3800'];
+
+  // Body/suit colour
+  const bodyCol = (id==='indy') ? '#E84898' : (id==='sterling') ? '#2858A0'
+                : (id==='kane')  ? '#505050'  : '#800000';
+
+  // Hair
+  r(3,0, 8,2, hA); r(2,1,10,2, hA);
+  // Indy has slightly shorter hair (to ~row 14, not 22)
+  const hairLen = (id==='indy') ? 13 : 6;
+  r(0,2, 3, hairLen, hA); r(11,2, 3, hairLen, hA);
+  r(1,3, 1, hairLen-2, hB); r(12,3, 1, hairLen-2, hB);
+
+  // Face
+  r(3,2, 8,9, P.SKN);
+  r(3,2, 8,1, hA);        // hairline
+  r(4,4, 3,1, hA);        // brows
+  r(7,4, 3,1, hA);
+  r(4,5, 3,2, '#F0F0E8'); // eyes
+  r(7,5, 3,2, '#F0F0E8');
+  r(5,6, 1,1, col);       // iris (matches NPC colour)
+  r(8,6, 1,1, col);
+  r(5,9, 4,1, '#C08070'); // mouth
+
+  // Neck
+  r(5,11, 4,2, P.SKN);
+
+  // Body
+  r(3,13, 8,8, bodyCol);
+  r(6,13, 2,8, '#00000030');  // seam
+
+  // Arms
+  const aO = fr ? 1 : 0;
+  r(1,13-aO, 2,7, bodyCol);
+  r(11,13+aO,2,7, bodyCol);
+
+  // Legs
+  const lO = fr ? 1 : 0;
+  r(3,21, 8,4, '#1A3878');
+  r(3,24, 3,4+lO,   '#1A3878');
+  r(8,24, 3,4-lO+1, '#1A3878');
+
+  // Shoes
+  r(2,27+lO, 5,2, '#281808');
+  r(7,28-lO, 5,2, '#281808');
 }
 
 function drawPlayer() {
-  const sx = pl.x - cam.x;
-  const sy = pl.y - cam.y;
-  // Shadow
-  px(sx+2, sy+15, 12, 2, '#00000060');
-  drawChar(sx, sy, P.TEL, pl.dir, pl.frame);
+  // Sprite is 14×30; feet should sit at pl.y + pl.h
+  const sx = pl.x - cam.x - 1;
+  const sy = pl.y - cam.y - 18;
+  // Ground shadow at foot level
+  px(sx+2, pl.y - cam.y + pl.h, 11, 2, 'rgba(0,0,0,0.35)');
+  drawBeck(sx, sy, pl.dir, pl.frame);
 }
 
 function drawNPC(npc) {
   if (!npc.active) return;
-  const sx = npc.x - cam.x;
-  const sy = npc.y - cam.y;
-  if (sx < -20 || sx > GW+20 || sy < -20 || sy > GH+20) return;
-  px(sx+2, sy+15, 12, 2, '#00000060');
-  drawChar(sx, sy, npc.col, npc.dir, Math.floor(game.frame/15)%2);
-  // Label above certain NPCs
-  if (npc.id === 'indy') {
-    drawText('INDY', sx+1, sy-4, P.PNK, 5);
-  } else if (npc.id === 'sterling') {
-    drawText('STERLING', sx-8, sy-4, P.LBLU, 5);
-  } else if (npc.id === 'kane') {
-    drawText('KANE', sx+2, sy-4, P.LGRY, 5);
-  } else if (npc.id === 'cafe_arrow') {
-    // Draw arrow indicating cafeteria is right
+  const sx = npc.x - cam.x - 1;
+  const sy = npc.y - cam.y - 18;
+  if (sx < -30 || sx > GW+30 || sy < -40 || sy > GH+10) return;
+
+  if (npc.id === 'cafe_arrow') {
     if (Math.floor(game.frame/20)%2===0)
-      drawText('► CAFE', sx, sy+6, P.YEL, 5);
+      drawText('► CAFE', npc.x - cam.x, npc.y - cam.y + 6, P.YEL, 5);
     return;
   }
+
+  const fr = Math.floor(game.frame/15) % 2;
+  px(sx+2, npc.y - cam.y + npc.h, 11, 2, 'rgba(0,0,0,0.3)');
+  drawNPCChar(sx, sy, npc, fr);
+
+  // Name tag
+  const labels = {indy:'INDY', sterling:'STERLING', kane:'KANE'};
+  const lbl = labels[npc.id];
+  const lcol = {indy:P.PNK, sterling:P.LBLU, kane:P.LGRY}[npc.id] || P.WHT;
+  if (lbl) drawText(lbl, sx + (lbl.length<5?3:-2), sy - 3, lcol, 5);
 }
 
 // ============================================================
