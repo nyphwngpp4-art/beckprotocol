@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beck Hawthorne: Origin</title>
+<style>
+/* ============================================================
+   BECK HAWTHORNE: ORIGIN — Chapter One: Pattern
+   Single HTML file. Edit the DATA sections near the bottom
+   of the <script> to change story, puzzles, or evidence.
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg:      #09090f;
+  --panel:   #101018;
+  --border:  #222234;
+  --green:   #00ff88;
+  --amber:   #f5c040;
+  --red:     #ff4455;
+  --blue:    #5599ff;
+  --pink:    #ff80cc;
+  --text:    #b8b8cc;
+  --bright:  #ffffff;
+  --dim:     #55556a;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+}
+
+#game {
+  width: 100%;
+  max-width: 860px;
+  padding: 24px 18px 80px;
+}
+
+/* ---- Fade animation ---- */
+.fade { animation: fadeIn 0.35s ease; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Scene label ---- */
+.scene-label {
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 10px;
+}
+
+/* ---- Title screen ---- */
+.title-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 90vh;
+  text-align: center;
+  gap: 0;
+}
+
+.title-logo {
+  font-family: 'Courier New', monospace;
+  font-size: clamp(30px, 7vw, 58px);
+  font-weight: 900;
+  color: var(--bright);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  line-height: 1.1;
+  margin-bottom: 8px;
+}
+
+.title-sub {
+  font-family: monospace;
+  font-size: clamp(10px, 2vw, 13px);
+  letter-spacing: 8px;
+  color: var(--green);
+  text-transform: uppercase;
+  margin-bottom: 36px;
+}
+
+.title-tagline {
+  font-size: 15px;
+  color: var(--dim);
+  max-width: 420px;
+  margin-bottom: 44px;
+  line-height: 1.9;
+}
+
+/* ---- Panels ---- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 22px 26px;
+  margin-bottom: 18px;
+}
+
+.panel-title {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--green);
+  font-family: monospace;
+  margin-bottom: 14px;
+}
+
+/* ---- Narrative text ---- */
+.narr {
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.narr:last-child { margin-bottom: 0; }
+
+/* ---- Inline color helpers ---- */
+.hi     { color: var(--bright); font-weight: 600; }
+.gr     { color: var(--green); }
+.am     { color: var(--amber); }
+.rd     { color: var(--red); }
+.bl     { color: var(--blue); }
+.dm     { color: var(--dim); }
+
+/* ---- Dialogue ---- */
+.dialogue { margin: 18px 0; }
+
+.speaker {
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 5px;
+}
+.speaker.auth  { color: var(--blue); }
+.speaker.enemy { color: var(--red); }
+.speaker.indy  { color: var(--pink); }
+
+.quote {
+  color: var(--bright);
+  border-left: 3px solid var(--border);
+  padding-left: 14px;
+}
+
+/* ---- Choice buttons ---- */
+.choices { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+
+.choice-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 18px;
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, padding-left 0.12s, background 0.12s;
+  line-height: 1.55;
+}
+.choice-btn:hover {
+  border-color: var(--green);
+  color: var(--bright);
+  background: rgba(0,255,136,0.04);
+  padding-left: 24px;
+}
+.choice-key {
+  display: block;
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--green);
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+
+/* ---- Primary CTA button ---- */
+.btn {
+  display: inline-block;
+  background: transparent;
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  padding: 11px 26px;
+  color: var(--green);
+  font-size: 13px;
+  font-family: monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  margin-top: 10px;
+}
+.btn:hover { background: var(--green); color: var(--bg); }
+
+/* ---- Divider ---- */
+.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+/* ---- Terminal block ---- */
+.terminal {
+  font-family: 'Courier New', monospace;
+  background: #030307;
+  border: 1px solid var(--green);
+  border-radius: 4px;
+  padding: 16px;
+  color: var(--green);
+  font-size: 13px;
+  line-height: 1.9;
+  margin-bottom: 18px;
+}
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 13px;
+  background: var(--green);
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ---- Pattern Lock photo frame ---- */
+.photo-frame {
+  background: #0c0c14;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  font-family: monospace;
+  font-size: 13.5px;
+  line-height: 1.9;
+}
+.photo-meta {
+  font-size: 11px;
+  color: var(--dim);
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 10px;
+}
+
+/* ---- Location grid (puzzle choices) ---- */
+.loc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+.loc-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, color 0.12s;
+}
+.loc-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--bright); }
+.loc-btn.correct { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.05); }
+.loc-btn.wrong   { border-color: var(--red);   color: var(--red);   opacity: 0.55; }
+
+/* ---- Clue words in anomaly puzzle ---- */
+.clue {
+  border-bottom: 1px dashed transparent;
+  transition: color 0.1s, border-color 0.1s, opacity 0.1s;
+}
+.clue.clickable {
+  color: var(--amber);
+  border-bottom-color: var(--amber);
+  opacity: 0.65;
+  cursor: pointer;
+}
+.clue.clickable:hover { opacity: 1; }
+.clue.found { color: var(--green); border-bottom-color: var(--green); opacity: 1; cursor: default; }
+
+/* ---- Evidence pip bar ---- */
+.evidence-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.ev-label { font-family: monospace; font-size: 10px; letter-spacing: 2px; color: var(--dim); text-transform: uppercase; }
+.pip {
+  width: 34px; height: 7px;
+  border-radius: 4px;
+  background: var(--border);
+  transition: background 0.3s;
+}
+.pip.filled { background: var(--amber); }
+
+/* ---- Dock area grid ---- */
+.area-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+.area-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 16px 14px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, color 0.12s;
+  line-height: 1.5;
+}
+.area-btn:hover:not(:disabled) { border-color: var(--amber); color: var(--bright); }
+.area-btn:disabled { opacity: 0.38; cursor: default; }
+.area-icon { font-size: 22px; display: block; margin-bottom: 6px; }
+.area-done { font-family: monospace; font-size: 10px; letter-spacing: 1px; color: var(--green); margin-top: 4px; }
+
+/* ---- Fight sequence ---- */
+.fight-arena {
+  background: #0f0509;
+  border: 2px solid var(--red);
+  border-radius: 8px;
+  padding: 28px 24px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+.fight-situation {
+  font-size: 16px;
+  color: var(--bright);
+  margin-bottom: 22px;
+  line-height: 1.65;
+}
+.fight-btn {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto 20px;
+  padding: 20px;
+  font-size: 20px;
+  font-weight: 900;
+  font-family: monospace;
+  letter-spacing: 4px;
+  border: 3px solid var(--red);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--red);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.1s, color 0.1s, transform 0.1s;
+  animation: glow 0.55s ease-in-out infinite alternate;
+}
+.fight-btn:hover { background: var(--red); color: var(--bg); transform: scale(1.04); }
+@keyframes glow {
+  from { box-shadow: 0 0 0px var(--red); }
+  to   { box-shadow: 0 0 22px var(--red); }
+}
+.timer-wrap { background: var(--border); border-radius: 4px; height: 10px; overflow: hidden; margin-bottom: 10px; }
+.timer-fill { height: 100%; background: var(--red); border-radius: 4px; }
+.fight-score { font-family: monospace; font-size: 12px; color: var(--dim); letter-spacing: 2px; margin-bottom: 14px; }
+.fight-result {
+  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin: 12px 0;
+  font-family: monospace;
+  letter-spacing: 0.5px;
+}
+.fight-result.win { color: var(--green); border: 1px solid var(--green); background: rgba(0,255,136,0.04); }
+.fight-result.lose { color: var(--red);   border: 1px solid var(--red);   background: rgba(255,68,85,0.04); }
+
+/* ---- Ending screen ---- */
+.ending { text-align: center; padding: 40px 0 20px; }
+
+/* ---- Responsive ---- */
+@media (max-width: 560px) {
+  .loc-grid, .area-grid { grid-template-columns: 1fr; }
+  .fight-btn { font-size: 17px; padding: 16px; }
+  .panel { padding: 16px 14px; }
+}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<script>
+'use strict';
+
+/* ============================================================
+   GAME STATE — tracks everything that happens during a run
+   ============================================================ */
+const S = {
+  scene:        'title',
+  choices:      {},          // stores every decision the player makes
+  fightWins:    0,
+  fightRound:   0,
+  fightTimer:   null,
+  cluesFound:   0,
+};
+
+/* ============================================================
+   DATA — edit these to change the story content
+   ============================================================ */
+
+// --- Pattern Lock puzzles (location guessing game) ---
+const PUZZLES = [
+  {
+    photo: `
+      A narrow cobblestone alley runs between buildings whose upper floors lean toward each other.
+      Ground-floor storefronts display hand-lettered signs in a Germanic script.
+      A <em>tram track</em> is set into the stones. A cathedral spire dominates the skyline.
+      Late afternoon. The shadows run <em>west</em>, suggesting northern latitude.
+      The city's signature blue-and-white trams are just visible at the end of the alley.
+    `,
+    meta: 'FILE: pattern_lock_wk47_img03.jpg | 4.2 MB | COORD: 47.3769°N, 8.5417°E',
+    options: ['Munich, Germany', 'Zurich, Switzerland', 'Vienna, Austria', 'Prague, Czech Republic'],
+    correct: 1,
+    explain: 'Coordinates match central Zurich. The blue-and-white trams are unique to the city.',
+    next: 'puzzle_2',
+  },
+  {
+    photo: `
+      Low, sun-bleached concrete buildings painted turquoise and faded terracotta.
+      A single dirt road stretches to the horizon under a flat white sky.
+      A hand-painted sign is partially readable — Arabic script with an English translation underneath:
+      <em>PORT AUTHORITY — AUTHORIZED VEHICLES ONLY.</em>
+      Three cargo vessels at anchor, water glassy and copper in the evening light.
+    `,
+    meta: 'FILE: pattern_lock_wk47_img07.jpg | 3.8 MB | COORD: 15.5527°N, 32.5324°E',
+    options: ['Djibouti City, Djibouti', 'Khartoum, Sudan', 'Aden, Yemen', 'Mogadishu, Somalia'],
+    correct: 1,
+    explain: 'Coordinates match Khartoum. Arabic-English bilingual signage, arid terrain, port on the Nile.',
+    next: 'puzzle_anomaly',
+  },
+];
+
+// --- Evidence Beck can find at the dock ---
+const EVIDENCE = {
+  manifest: {
+    name: 'Shipping Manifest',
+    icon: '📄',
+    desc: `A clipboard inside the guard booth. The manifest lists the cargo as <span class="hi">AGRICULTURAL EQUIPMENT — BULK</span>. Three signatures at the bottom. One carries an unofficial government seal Beck doesn't recognize.`,
+    found: false,
+  },
+  crates: {
+    name: 'Weapons Crates',
+    icon: '📦',
+    desc: `Dozens of unmarked wooden crates stacked on pallets, stamped <span class="hi">FARM TOOLS / FRAGILE</span>. Beck lifts one corner of a lid. The weight distribution is completely wrong for farming equipment. She photographs the interior through a gap: metal tubes wrapped in packing foam.`,
+    found: false,
+  },
+  photos: {
+    name: 'Photographs',
+    icon: '📷',
+    desc: `Inside the storage shed: a folding table with photographs spread across it. Military-grade rifles. Rocket components. Night-vision headsets laid out on a green tarp. Partial serial numbers visible. Beck photographs every image.`,
+    found: false,
+  },
+  plates: {
+    name: 'License Plates',
+    icon: '🚐',
+    desc: `Two vans in the parking area with their plates covered by magnetic mud shields. One shield has slipped — Beck can read a partial plate: <span class="am">7-KX-4</span>. Colorado commercial registry.`,
+    found: false,
+  },
+};
+
+// --- Dock areas to explore ---
+const DOCK_AREAS = [
+  {
+    id: 'north_gate',
+    name: 'North Gate',
+    icon: '🚪',
+    short: 'Guard booth. Empty. A clipboard hangs on a nail.',
+    evidenceId: 'manifest',
+    explored: false,
+  },
+  {
+    id: 'loading_dock',
+    name: 'Loading Dock',
+    icon: '🏗️',
+    short: 'Main platform. Stacked crates, a forklift, hanging floodlights.',
+    evidenceId: 'crates',
+    explored: false,
+  },
+  {
+    id: 'storage_shed',
+    name: 'Storage Shed',
+    icon: '🏚️',
+    short: 'Corrugated metal building, house-sized. Padlock hanging open.',
+    evidenceId: 'photos',
+    explored: false,
+  },
+  {
+    id: 'parking_area',
+    name: 'Parking Area',
+    icon: '🚐',
+    short: 'Two vans at the far end. License plates covered with mud.',
+    evidenceId: 'plates',
+    explored: false,
+  },
+];
+
+// --- Fight rounds (timed reaction sequences) ---
+const FIGHT_ROUNDS = [
+  {
+    situation: `You're nearly at the fence when a hand clamps onto your shoulder from behind. Heavy grip. You have one second.`,
+    action: 'BREAK FREE',
+    timeMs: 3000,
+    win:  `You drop your shoulder, spin hard, and break his grip. He stumbles forward. You run.`,
+    lose: `He holds on. You wrench your arm painfully, but pull yourself loose. Losing ground.`,
+  },
+  {
+    situation: `The fence is ten feet away. He's right behind you — you can hear his breathing. A forklift blocks the left. A wall of crates to the right. One path.`,
+    action: 'JUMP LEFT',
+    timeMs: 2500,
+    win:  `You vault the forklift's extended arm and land clean on the other side. He crashes into it.`,
+    lose: `You hesitate a half-second too long. He gets a fist in your jacket — you rip free and fall, scraping your palm hard.`,
+  },
+  {
+    situation: `A second man steps out of the shadows ahead. You're cornered: fence behind you, water to the left, two men closing. You look straight up.`,
+    action: 'CLIMB',
+    timeMs: 2800,
+    win:  `You grab the chain-link and go straight up — hands burning, feet pushing — and clear the top before either of them reaches you.`,
+    lose: `Your foot slips on the chain-link. A hand closes on your ankle. You kick once, hard, and haul yourself up. Barely.`,
+  },
+  {
+    situation: `You're on top of the fence. Twelve feet down on the other side is asphalt. One of them is already on the chain-link, climbing fast. No time.`,
+    action: 'JUMP',
+    timeMs: 2200,
+    win:  `You push off and tuck your knees. You land and roll, absorbing it. Your ankle protests. It holds. You're up in two seconds.`,
+    lose: `You land wrong. Your ankle twists on impact. You bite down on the pain and force your legs to move. They do.`,
+  },
+  {
+    situation: `You're running flat-out. So is he. Across the street: a parking garage. If you make it inside, you lose him in the dark.`,
+    action: 'RUN',
+    timeMs: 2000,
+    win:  `You hit the entrance full speed, take the ramp, duck between support columns. Thirty seconds later — silence. Gone.`,
+    lose: `He's faster. You dodge into a stairwell and press flat against the wall, not breathing. He passes. Gone.`,
+  },
+];
+
+/* ============================================================
+   RENDER ENGINE — core helpers
+   ============================================================ */
+const G = document.getElementById('game');
+
+function render(html) {
+  G.innerHTML = `<div class="fade">${html}</div>`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function go(name) {
+  S.scene = name;
+  if (S.fightTimer) { clearInterval(S.fightTimer); S.fightTimer = null; }
+  SCENES[name]();
+}
+
+function label(text) {
+  return `<div class="scene-label">${text}</div>`;
+}
+
+function panel(titleText, body) {
+  const t = titleText ? `<div class="panel-title">${titleText}</div>` : '';
+  return `<div class="panel">${t}${body}</div>`;
+}
+
+function n(text) { return `<p class="narr">${text}</p>`; }
+
+function dlg(speaker, cls, line) {
+  return `<div class="dialogue">
+    <div class="speaker ${cls}">${speaker}</div>
+    <div class="quote">${line}</div>
+  </div>`;
+}
+
+function choices(...items) {
+  const btns = items.map((c, i) => `
+    <button class="choice-btn" onclick="${c.fn}">
+      <span class="choice-key">Option ${String.fromCharCode(65 + i)}</span>
+      ${c.label}
+    </button>`).join('');
+  return `<div class="choices">${btns}</div>`;
+}
+
+function btn(text, fn) {
+  return `<button class="btn" onclick="${fn}">${text}</button>`;
+}
+
+function pick(id, val) { S.choices[id] = val; }
+
+function evidenceBar() {
+  const keys = Object.keys(EVIDENCE);
+  const pips = keys.map(k => `<div class="pip ${EVIDENCE[k].found ? 'filled' : ''}"></div>`).join('');
+  const count = keys.filter(k => EVIDENCE[k].found).length;
+  return `<div class="evidence-bar">
+    <span class="ev-label">Evidence</span>${pips}
+    <span class="ev-label">${count}/${keys.length}</span>
+  </div>`;
+}
+
+/* ============================================================
+   PUZZLE SYSTEM
+   ============================================================ */
+let puzzleIndex = 0;
+
+function runPuzzle(idx) {
+  puzzleIndex = idx;
+  const pz = PUZZLES[idx];
+  render(`
+    ${label(`Pattern Lock — Week 47 — Puzzle #${[3,7][idx]}`)}
+    <div class="photo-frame">
+      <div class="panel-title">Pattern Lock Weekly Photo</div>
+      <p>${pz.photo}</p>
+      <div class="photo-meta">${pz.meta}</div>
+    </div>
+    ${panel('Where was this photo taken?', `
+      <div class="loc-grid">
+        ${pz.options.map((opt, i) =>
+          `<button class="loc-btn" id="lb${i}" onclick="answerPuzzle(${i})">${opt}</button>`
+        ).join('')}
+      </div>
+      <div id="puzzle-feedback" style="margin-top:14px"></div>
+    `)}
+  `);
+}
+
+window.answerPuzzle = function(chosen) {
+  const pz = PUZZLES[puzzleIndex];
+  document.querySelectorAll('.loc-btn').forEach((b, i) => {
+    b.disabled = true;
+    if (i === pz.correct) b.classList.add('correct');
+    else if (i === chosen) b.classList.add('wrong');
+  });
+  const fb = document.getElementById('puzzle-feedback');
+  const correct = chosen === pz.correct;
+  fb.innerHTML = correct
+    ? `<p class="narr gr"><strong>Correct.</strong> ${pz.explain} Beck's rank goes up. She opens the next puzzle.</p>`
+    : `<p class="narr am">Beck already knows the answer. She never gets these wrong. She clicks the right one and moves on.</p>`;
+
+  const b = document.createElement('button');
+  b.className = 'btn';
+  b.textContent = 'Next →';
+  b.onclick = () => go(pz.next);
+  fb.appendChild(b);
+};
+
+/* ============================================================
+   ANOMALY PUZZLE — click hidden clues in the photo text
+   ============================================================ */
+const CLUE_NOTES = {
+  dock:     `"dock crane" — a dock is a location. Photo captions name objects. This names a place. Why?`,
+  east:     `"east-facing, based on the moon position" — the moon doesn't reliably indicate east. This is wrong. Deliberately wrong.`,
+  latenight:`"unusual late-night operation" — this describes what's happening, not what the photo shows. Someone is giving information.`,
+  contraband:`"possible contraband indicators" — a photo caption has no reason to say this. Someone is labeling what they're seeing in real life.`,
+};
+
+window.findClue = function(key, el) {
+  if (el.classList.contains('found')) return;
+  el.classList.remove('clickable');
+  el.classList.add('found');
+  S.cluesFound++;
+
+  const note = document.createElement('p');
+  note.className = 'narr am';
+  note.style.fontSize = '13px';
+  note.textContent = `→ ${CLUE_NOTES[key]}`;
+  document.getElementById('clue-notes').appendChild(note);
+
+  document.getElementById('clue-count').textContent = `${S.cluesFound} / 4`;
+
+  if (S.cluesFound >= 4) {
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.style.marginTop = '14px';
+    b.textContent = 'Decode the message →';
+    b.onclick = () => go('decode');
+    document.getElementById('clue-notes').appendChild(b);
+  }
+};
+
+/* ============================================================
+   DOCK EXPLORATION
+   ============================================================ */
+window.exploreArea = function(id) {
+  const area = DOCK_AREAS.find(a => a.id === id);
+  if (!area || area.explored) return;
+  area.explored = true;
+
+  const ev = area.evidenceId ? EVIDENCE[area.evidenceId] : null;
+  if (ev) ev.found = true;
+
+  render(`
+    ${label(`East Dock — ${area.name}`)}
+    ${panel('', `
+      ${ev ? `
+        <div class="panel-title am">Evidence Found — ${ev.icon} ${ev.name}</div>
+        ${n(ev.desc)}
+        ${n(`Beck photographs everything. Her shutter sound has been off for months.`)}
+      ` : n(`Nothing critical here — but useful. Beck notes the details anyway.`)}
+    `)}
+    ${btn('← Back to the yard', "go('dock_explore')")}
+  `);
+};
+
+/* ============================================================
+   FIGHT SYSTEM
+   ============================================================ */
+function runFightRound() {
+  if (S.fightRound >= FIGHT_ROUNDS.length) { go('escape'); return; }
+
+  const r = FIGHT_ROUNDS[S.fightRound];
+  const total = FIGHT_ROUNDS.length;
+  let done = false;
+
+  render(`
+    ${label(`Escape — Round ${S.fightRound + 1} of ${total}`)}
+    <div class="fight-arena">
+      <p class="fight-score">Won: ${S.fightWins} / ${S.fightRound} rounds</p>
+      <p class="fight-situation">${r.situation}</p>
+      <div class="timer-wrap"><div class="timer-fill" id="tfill" style="width:100%"></div></div>
+      <p style="font-family:monospace;font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:14px">CLICK BEFORE TIME RUNS OUT</p>
+      <button class="fight-btn" id="fbtn" onclick="fightHit()">${r.action}</button>
+      <div id="fresult"></div>
+    </div>
+  `);
+
+  window.fightHit = function() {
+    if (done) return;
+    done = true;
+    clearInterval(S.fightTimer);
+    S.fightWins++;
+    showFightResult(true, r.win);
+  };
+
+  const start = Date.now();
+  S.fightTimer = setInterval(() => {
+    const pct = Math.max(0, 1 - (Date.now() - start) / r.timeMs);
+    const bar = document.getElementById('tfill');
+    if (bar) {
+      bar.style.width = (pct * 100) + '%';
+      if (pct < 0.3) bar.style.background = '#ff2200';
+    }
+    if (pct <= 0 && !done) {
+      done = true;
+      clearInterval(S.fightTimer);
+      showFightResult(false, r.lose);
+    }
+  }, 40);
+}
+
+function showFightResult(won, text) {
+  const fb = document.getElementById('fbtn');
+  if (fb) fb.style.display = 'none';
+  const rd = document.getElementById('fresult');
+  if (!rd) return;
+  rd.innerHTML = `<div class="fight-result ${won ? 'win' : 'lose'}">${won ? '✓' : '✗'} ${text}</div>`;
+  const nb = document.createElement('button');
+  nb.className = 'btn';
+  nb.style.marginTop = '14px';
+  nb.textContent = S.fightRound + 1 >= FIGHT_ROUNDS.length ? 'Escape →' : 'Next →';
+  nb.onclick = () => { S.fightRound++; runFightRound(); };
+  rd.appendChild(nb);
+}
+
+/* ============================================================
+   SCENES
+   ============================================================ */
+const SCENES = {
+
+/* ---- TITLE ---- */
+title() {
+  render(`
+    <div class="title-screen">
+      <div class="title-logo">Beck Hawthorne</div>
+      <div class="title-sub">Project Argus &nbsp;·&nbsp; Origin</div>
+      <p class="title-tagline">
+        She wasn't trying to become a spy.<br>
+        She was just the only one paying attention.
+      </p>
+      ${btn('Start — Chapter One: Pattern', "go('intro')")}
+      <p class="dm" style="margin-top:28px;font-size:12px;font-family:monospace;letter-spacing:1px">Denver, Colorado</p>
+    </div>
+  `);
+},
+
+/* ---- INTRO ---- */
+intro() {
+  render(`
+    ${label('Denver, Colorado — Tuesday, 9:47 PM')}
+    ${panel('', `
+      ${n(`Rebecca Hawthorne is fifteen years old and is supposed to be doing homework.`)}
+      ${n(`Her laptop is open. Her homework is technically visible. But Beck hasn't touched it in forty minutes — because every Tuesday at 9:30 PM, a social media account called <span class="hi">Pattern Lock</span> posts a new photo.`)}
+      ${n(`And every week, Beck wins.`)}
+      ${n(`Pattern Lock is a puzzle. Someone posts a photograph from somewhere in the world — no location, no caption. Just the image. Your job: figure out where it was taken before anyone else does. Thousands of people play.`)}
+      ${n(`Beck wins more than almost anyone on the leaderboard. She notices things — the angle of light at different latitudes, the specific fonts on foreign storefronts, the way concrete weathers in coastal humidity versus dry heat.`)}
+      ${n(`It's not bragging if you're just right.`)}
+    `)}
+    ${btn("Open this week's puzzle", "go('puzzle_1')")}
+  `);
+},
+
+/* ---- PUZZLES ---- */
+puzzle_1()       { runPuzzle(0); },
+puzzle_2()       { runPuzzle(1); },
+
+/* ---- ANOMALY PUZZLE ---- */
+puzzle_anomaly() {
+  S.cluesFound = 0;
+  render(`
+    ${label('Pattern Lock — Week 47 — Puzzle #11')}
+    ${panel('', `
+      ${n(`<span class="gr">Correct again. Rank #1.</span> BabelFish97 drops to second.`)}
+      ${n(`Puzzle #11 is supposed to be the hardest of the week. Beck opens it.`)}
+      ${n(`She starts reading the way she always does — left to right, then details. Something stops her cold.`)}
+    `)}
+    <div class="photo-frame">
+      <div class="panel-title">Pattern Lock — Puzzle #11</div>
+      <p>
+        A container shipping yard at night. Floodlights cut across rows of steel containers.
+        A <span class="clue clickable" onclick="findClue('dock', this)">dock</span> crane is visible at the far right.
+        Water in the background is flat and dark —
+        <span class="clue clickable" onclick="findClue('east', this)">east-facing, based on the moon position</span>.
+        One container stands open, doors folded back.
+        Workers appear to be loading rather than unloading —
+        this kind of <span class="clue clickable" onclick="findClue('latenight', this)">unusual late-night operation</span>
+        raises questions.
+        <span class="clue clickable" onclick="findClue('contraband', this)">Possible contraband indicators</span>
+        in the staging pattern.
+      </p>
+      <div class="photo-meta">
+        FILE: pattern_lock_wk47_img11.jpg | COORD: <span class="am">39.7392°N, 104.9903°W</span> | LOCAL TIME: <span class="am">23:00</span>
+      </div>
+    </div>
+    ${panel('Beck\'s Observation', `
+      ${n(`Something about this photo is wrong. Not the location — the <em>photo itself</em>. Beck's eyes keep catching on specific words. Click on anything that seems off.`)}
+      <p style="font-family:monospace;font-size:12px;color:var(--dim);margin-top:10px">
+        Anomalies found: <span id="clue-count" class="am">0 / 4</span>
+      </p>
+      <div id="clue-notes"></div>
+    `)}
+  `);
+},
+
+/* ---- DECODE ---- */
+decode() {
+  render(`
+    ${label("Beck's Bedroom — 10:14 PM")}
+    ${panel('', `
+      ${n(`Beck sits back.`)}
+      ${n(`The coordinates embedded in that last photo — <span class="am">39.7392°N, 104.9903°W</span> — aren't somewhere overseas. She checked twice.`)}
+      ${n(`That's the <span class="hi">East Dock on the Platte River industrial strip</span>. She's driven past it a hundred times.`)}
+      ${n(`The timestamp says 23:00. 11 PM. <em>Tonight.</em>`)}
+      ${n(`And someone deliberately wrote "dock," "east-facing," "late-night operation," and "contraband" into the photo's own caption — words that mean nothing alone, but together?`)}
+    `)}
+    <div class="terminal">
+&gt; DECODED MESSAGE<br>
+&gt; ─────────────────────────<br>
+&gt; LOCATION: East Dock, Platte River<br>
+&gt; TIME:     Tonight, 23:00<br>
+&gt; TYPE:     Contraband / Arms<br>
+&gt; SOURCE:   Pattern Lock @wk47_img11<br>
+&gt; <span class="cursor"></span>
+    </div>
+    ${panel('', `
+      ${n(`Someone is using Pattern Lock to pass instructions. The "puzzle" is a dead drop.`)}
+      ${n(`Beck closes her laptop. Opens it. Closes it again. Does this three times.`)}
+      ${n(`It's 10:14 PM. The East Dock is twenty minutes away by bike.`)}
+    `)}
+    ${choices(
+      { label: 'Call the police right now. This is too big for one person.', fn: "pick('first_move','police'); go('try_police')" },
+      { label: 'Go to the dock first. Get evidence. Then call the police.', fn: "pick('first_move','dock_first'); go('decision_go')" }
+    )}
+  `);
+},
+
+/* ---- TRY POLICE ---- */
+try_police() {
+  render(`
+    ${label('Denver PD Non-Emergency — 10:17 PM')}
+    ${panel('', `${n(`The phone rings four times.`)}`)}
+    ${dlg('Dispatch', 'auth', `Denver Police, non-emergency.`)}
+    ${dlg('Beck', '', `Hi — I think there's going to be an illegal weapons shipment at the East Dock tonight. 11 PM. I decoded hidden messages in an online puzzle account. The GPS coordinates in the photo metadata point to the Platte River East Dock and the time—`)}
+    ${dlg('Dispatch', 'auth', `How old are you?`)}
+    ${dlg('Beck', '', `Fifteen. But that doesn't matter. The coordinates are verifiable. Anyone can check them—`)}
+    ${dlg('Dispatch', 'auth', `Is this for a school project, hon?`)}
+    ${panel('', `
+      ${n(`She can hear someone laughing in the background.`)}
+      ${n(`Beck hangs up.`)}
+    `)}
+    ${choices(
+      { label: 'Go to the dock yourself. If the evidence is real, you\'ll prove it.', fn: "pick('police_result','not_believed'); go('decision_go')" },
+      { label: 'Call back and demand to speak to a supervisor.', fn: "go('police_supervisor')" }
+    )}
+  `);
+},
+
+/* ---- POLICE SUPERVISOR ---- */
+police_supervisor() {
+  render(`
+    ${label('Denver PD — 10:19 PM')}
+    ${panel('', `${n(`The supervisor listens for ninety seconds without interrupting.`)}`)}
+    ${dlg('Supervisor', 'auth', `Kid, I appreciate the call. But I can't dispatch units to a dock at 11 PM because of a photo puzzle. If you witness actual criminal activity in progress, call 911. Understood?`)}
+    ${panel('', `
+      ${n(`He doesn't wait for an answer. The line goes dead.`)}
+      ${n(`Beck stares at the phone. Her jaw is tight.`)}
+      ${n(`<em>If you witness actual criminal activity.</em>`)}
+      ${n(`Fine.`)}
+    `)}
+    ${btn('Go to the dock', "pick('police_result','supervisor_dismissed'); go('decision_go')")}
+  `);
+},
+
+/* ---- DECISION GO ---- */
+decision_go() {
+  render(`
+    ${label("Beck's Bedroom — 10:22 PM")}
+    ${panel('', `
+      ${n(`Beck pulls on dark clothes. Hoodie. Flat-soled sneakers. She checks her phone battery: 87%. She opens her camera app and confirms it's on silent.`)}
+      ${n(`She writes a note and sets it on her pillow: <em>Went for a ride. Back by midnight. Don't worry.</em>`)}
+      ${n(`Her parents are watching TV downstairs. She takes the back stairs.`)}
+      ${n(`The city is quiet. It's 10:22 PM and Beck Hawthorne is biking toward an illegal arms shipment. <span class="hi">Alone.</span> No backup, no weapon, no plan except: see it, photograph it, prove it.`)}
+    `)}
+    ${btn('Arrive at the dock', "go('dock_arrive')")}
+  `);
+},
+
+/* ---- DOCK ARRIVE ---- */
+dock_arrive() {
+  render(`
+    ${label('East Dock, Platte River — 10:51 PM')}
+    ${panel('', `
+      ${n(`The East Dock smells like diesel and river mud.`)}
+      ${n(`Beck locks her bike two blocks away and approaches on foot, keeping to the shadow line of the warehouse walls. Floodlights blast white light over sections of the yard, but between them the darkness is total.`)}
+      ${n(`She counts <span class="hi">three people</span> visible from her position: two near the loading dock, one near a vehicle. There may be more inside.`)}
+      ${n(`Her phone camera has a decent zoom. What she needs is to get closer.`)}
+    `)}
+    ${btn('Move into the yard', "go('dock_explore')")}
+  `);
+},
+
+/* ---- DOCK EXPLORE ---- */
+dock_explore() {
+  const foundCount = Object.values(EVIDENCE).filter(e => e.found).length;
+  const allFound = foundCount >= Object.keys(EVIDENCE).length;
+
+  const areaButtons = DOCK_AREAS.map(a => `
+    <button class="area-btn" ${a.explored ? 'disabled' : ''} onclick="exploreArea('${a.id}')">
+      <span class="area-icon">${a.icon}</span>
+      <strong style="color:var(--bright)">${a.name}</strong><br>
+      <span style="font-size:12px;color:var(--dim)">${a.short}</span>
+      ${a.explored ? '<div class="area-done">✓ Searched</div>' : ''}
+    </button>
+  `).join('');
+
+  render(`
+    ${label('East Dock — Active')}
+    ${evidenceBar()}
+    ${panel('', `
+      ${n(`Beck is inside the yard, moving slow. She uses the stacked containers as cover. Her heart rate is elevated but her hands are steady.`)}
+      ${n(`She has time — but not unlimited time. The operation will wrap before midnight.`)}
+    `)}
+    <div class="area-grid">${areaButtons}</div>
+    ${allFound
+      ? `<div style="margin-top:16px">${btn('You have everything. Get out now.', "go('spotted')")}</div>`
+      : foundCount >= 2
+        ? `<p class="dm" style="font-family:monospace;font-size:12px;margin-top:12px">You have enough for a case. There might be more...</p>`
+        : ''
+    }
+  `);
+},
+
+/* ---- SPOTTED ---- */
+spotted() {
+  render(`
+    ${label('East Dock — 11:43 PM')}
+    ${panel('', `
+      ${n(`Beck is photographing the van's partial plate when the light changes.`)}
+      ${n(`Someone turned on a floodlight that wasn't on before.`)}
+      ${n(`She freezes.`)}
+      ${n(`A voice — maybe thirty feet away: <span class="rd">"Hey. Who's back there?"</span>`)}
+      ${n(`She presses flat against the container wall. She counts: one, two—`)}
+      ${n(`Footsteps. Fast. Getting faster.`)}
+    `)}
+    ${choices(
+      { label: '"Wait — I\'m lost. Looking for the parking garage." Try to bluff.', fn: "pick('spotted','bluff'); go('bluff_fails')" },
+      { label: 'Run. Now. Don\'t look back.', fn: "pick('spotted','run'); go('fight_intro')" },
+      { label: 'Hide behind the nearest container. Stay perfectly still.', fn: "pick('spotted','hide'); go('hide_fails')" }
+    )}
+  `);
+},
+
+/* ---- BLUFF FAILS ---- */
+bluff_fails() {
+  render(`
+    ${label('East Dock — Cornered')}
+    ${dlg('Beck', '', `Oh — sorry. I was looking for the parking garage on 15th? I think I came through the wrong gate.`)}
+    ${panel('', `
+      ${n(`The man who steps into the light is not a dock worker. He's built differently. And he is not confused — he's <span class="rd">suspicious</span>.`)}
+    `)}
+    ${dlg('Smuggler', 'enemy', `This facility closes at 8 PM. How did you get in here?`)}
+    ${panel('', `
+      ${n(`Beck's eyes go to his belt. Radio. Hand near his jacket.`)}
+      ${n(`He's reaching for the radio.`)}
+      ${n(`She runs.`)}
+    `)}
+    ${btn('RUN — now', "go('fight_intro')")}
+  `);
+},
+
+/* ---- HIDE FAILS ---- */
+hide_fails() {
+  render(`
+    ${label('East Dock — Cornered')}
+    ${panel('', `
+      ${n(`Beck goes perfectly still.`)}
+      ${n(`The footsteps slow. Stop. A flashlight sweeps across the container wall above her.`)}
+      ${n(`She doesn't breathe.`)}
+      ${n(`The beam drops — and catches her sneaker.`)}
+    `)}
+    ${dlg('Smuggler', 'enemy', `I see you. Get up. Slowly.`)}
+    ${panel('', `
+      ${n(`She has about half a second before he closes the distance.`)}
+      ${n(`She makes a decision.`)}
+    `)}
+    ${btn('MOVE — now', "go('fight_intro')")}
+  `);
+},
+
+/* ---- FIGHT INTRO ---- */
+fight_intro() {
+  render(`
+    ${label('East Dock — Chase — 11:47 PM')}
+    ${panel('', `
+      ${n(`There are two of them now.`)}
+      ${n(`Beck is fast — parkour-fast — but the yard is unfamiliar and she's running in the dark. The fence is <span class="hi">fifty yards ahead</span>. If she gets over it, she's gone. The street on the other side is lit and safe.`)}
+      ${n(`<span class="rd">She has to get there.</span>`)}
+      ${n(`Five obstacles between her and the fence. Five seconds where the wrong choice ends this.`)}
+    `)}
+    <div style="text-align:center;margin-top:16px">
+      ${btn('Begin escape sequence', "go('fight')")}
+    </div>
+  `);
+},
+
+/* ---- FIGHT ---- */
+fight() {
+  S.fightRound = 0;
+  S.fightWins = 0;
+  runFightRound();
+},
+
+/* ---- ESCAPE ---- */
+escape() {
+  const clean = S.fightWins >= 4;
+  render(`
+    ${label('Street Outside East Dock — 11:52 PM')}
+    ${panel('', `
+      ${clean
+        ? n(`Beck hits the street and doesn't stop for two blocks. She ducks into a bus shelter and leans against the wall, breathing hard.`)
+        : n(`Beck crashes out of the dock exit and stumbles into the street. Her ankle is throbbing and her palm is scraped. She makes it two blocks before she lets herself stop.`)
+      }
+      ${n(`She checks her phone. <span class="gr">All 43 photos intact.</span>`)}
+      ${n(`She's bleeding a little. She's grinning.`)}
+      ${n(`She has everything she needs.`)}
+    `)}
+    ${btn('Send the evidence', "go('send_evidence')")}
+  `);
+},
+
+/* ---- SEND EVIDENCE ---- */
+send_evidence() {
+  render(`
+    ${label('Bus Shelter, Three Blocks from East Dock — 11:54 PM')}
+    <div class="terminal">
+&gt; UPLOADING 43 IMAGES...<br>
+&gt; COMPRESSING...<br>
+&gt; RECIPIENT 1: Denver PD Tip Line (anonymous)<br>
+&gt; RECIPIENT 2: FBI Field Office Denver<br>
+&gt; RECIPIENT 3: Customs and Border Protection<br>
+&gt; MESSAGE: "East Dock, Platte River. Active tonight. Military-grade weapons.<br>
+&gt;           License partial: 7-KX-4. Source: Pattern Lock wk47_img11."<br>
+&gt; STATUS: <span style="color:var(--green)">ALL DELIVERED</span><br>
+&gt; <span class="cursor"></span>
+    </div>
+    ${panel('', `
+      ${n(`She sends a fourth copy to a technology journalist she follows, with a note: <em>"Hold this until you see a news story about the East Dock raid. Then you'll understand what you're looking at."</em>`)}
+      ${n(`Beck gets on her bike. She rides home. She doesn't tell anyone.`)}
+    `)}
+    ${btn('Four days later...', "go('aftermath')")}
+  `);
+},
+
+/* ---- AFTERMATH ---- */
+aftermath() {
+  render(`
+    ${label('Four Days Later')}
+    <div class="photo-frame">
+      <div class="panel-title">Denver Post — Breaking</div>
+      <p style="font-size:19px;font-weight:700;color:var(--bright);margin-bottom:12px;line-height:1.3">
+        Federal Raid on East Dock Uncovers Weapons Cache Valued at $4.2 Million
+      </p>
+      <p style="font-size:14px;line-height:1.75">
+        Federal agents conducted a pre-dawn raid on the Platte River East Dock Thursday, seizing an undisclosed quantity of military-grade weapons and arresting three individuals. Authorities cited an anonymous tip as the originating source. The weapons are believed to have been intended for overseas buyers. Investigation ongoing.
+      </p>
+      <div class="photo-meta">Denver Post Digital · Thursday Edition</div>
+    </div>
+    ${panel('', `
+      ${n(`Beck reads the article three times.`)}
+      ${n(`No one knows it was her. The police never called back. The FBI tip portal sent an auto-reply. The journalist hasn't written anything yet.`)}
+      ${n(`But the weapons were real. The raid happened. She was right.`)}
+      ${n(`And nobody knows.`)}
+      ${n(`That's fine.`)}
+      ${n(`Two weeks pass. Then, on a Thursday morning, something strange happens.`)}
+    `)}
+    ${btn('Go to school', "go('school_morning')")}
+  `);
+},
+
+/* ---- SCHOOL MORNING ---- */
+school_morning() {
+  render(`
+    ${label('Westview High School, Denver — Two Weeks Later — 7:41 AM')}
+    ${panel('', `
+      ${n(`Beck gets to school early. She likes the hallways before they fill up.`)}
+      ${n(`She's at her locker, swapping textbooks, when she hears the walk she always recognizes.`)}
+      ${n(`Indiana Jones — Indy — has had the same walk since third grade. Fast, a little uneven, favoring her right side from an old soccer injury. Beck could identify it from a hundred feet away.`)}
+      ${n(`They've been best friends since age eight, when they were seated next to each other in Ms. Cartwright's class and both finished the worksheet in eleven minutes and spent the rest of the period drawing maps of imaginary countries.`)}
+    `)}
+    ${btn('She rounds the corner', "go('indy_talk')")}
+  `);
+},
+
+/* ---- INDY TALK ---- */
+indy_talk() {
+  render(`
+    ${label('Westview High — Main Hallway')}
+    ${dlg('Indy', 'indy', `You have the look.`)}
+    ${dlg('Beck', '', `I don't have a look.`)}
+    ${dlg('Indy', 'indy', `You do. It's the one where you figured something out and you're not going to tell me, and you're pretending you're fine, and you're not fine.`)}
+    ${panel('', `${n(`Beck considers her options.`)}`)}
+    ${choices(
+      { label: '"I\'m fine. Just tired." Don\'t tell her anything.', fn: "pick('indy','deflect'); go('indy_deflect')" },
+      { label: '"Something happened. I can\'t talk about all of it. But I was right about something big."', fn: "pick('indy','partial'); go('indy_partial')" },
+      { label: '"You know that East Dock story on the news?" Tell her everything.', fn: "pick('indy','full'); go('indy_full')" }
+    )}
+  `);
+},
+
+/* ---- INDY RESPONSES ---- */
+indy_deflect() {
+  render(`
+    ${label('Westview High — Hallway')}
+    ${dlg('Beck', '', `I'm fine. Just tired.`)}
+    ${dlg('Indy', 'indy', `You are the worst liar I have ever met and I've known you for seven years.`)}
+    ${dlg('Beck', '', `I'm also fine with that.`)}
+    ${panel('', `
+      ${n(`Indy gives her The Look. It says: <em>I know you, and I'm going to let this go right now and ask about it later.</em>`)}
+      ${n(`Beck appreciates this more than she could say.`)}
+      ${n(`They walk to first period.`)}
+    `)}
+    ${btn('Lunch →', "go('lunch_approach')")}
+  `);
+},
+
+indy_partial() {
+  render(`
+    ${label('Westview High — Hallway')}
+    ${dlg('Beck', '', `Something happened. I can't talk about all of it. But I was right about something big.`)}
+    ${dlg('Indy', 'indy', `How big?`)}
+    ${dlg('Beck', '', `East Dock raid big.`)}
+    ${panel('', `${n(`Indy stares at her.`)}`)}
+    ${dlg('Indy', 'indy', `Beck. That was on the news.`)}
+    ${dlg('Beck', '', `I know.`)}
+    ${dlg('Indy', 'indy', `...Did you —`)}
+    ${dlg('Beck', '', `I can't talk about it.`)}
+    ${panel('', `${n(`A long moment. Then, quietly:`)}`)}
+    ${dlg('Indy', 'indy', `You know I'm going to need the full story eventually, right?`)}
+    ${dlg('Beck', '', `Eventually.`)}
+    ${btn('Lunch →', "go('lunch_approach')")}
+  `);
+},
+
+indy_full() {
+  render(`
+    ${label('Westview High — Hallway')}
+    ${dlg('Beck', '', `You know that story about the East Dock raid?`)}
+    ${panel('', `
+      ${n(`It takes eight minutes. Indy doesn't say a word until Beck is finished.`)}
+      ${n(`This is extremely unlike Indy.`)}
+    `)}
+    ${dlg('Indy', 'indy', `You went alone. To an active weapons deal. At midnight. At fifteen.`)}
+    ${dlg('Beck', '', `Technically 11 PM —`)}
+    ${dlg('Indy', 'indy', `Beck.`)}
+    ${dlg('Beck', '', `I know.`)}
+    ${dlg('Indy', 'indy', `I'm not going to say it was smart, because it wasn't. But it was the most <em>Beck</em> thing you have ever done in your entire life.`)}
+    ${dlg('Beck', '', `Is that a compliment?`)}
+    ${dlg('Indy', 'indy', `I genuinely don't know yet.`)}
+    ${btn('Lunch →', "go('lunch_approach')")}
+  `);
+},
+
+/* ---- LUNCH APPROACH ---- */
+lunch_approach() {
+  render(`
+    ${label('Westview High — Cafeteria — 12:14 PM')}
+    ${panel('', `
+      ${n(`The cafeteria is loud and smells like pizza and industrial cleaner. Normal Thursday.`)}
+      ${n(`Beck is halfway to her usual table when she stops.`)}
+      ${n(`Two adults are already sitting there.`)}
+      ${n(`They don't look like teachers. One is a man in his early forties with the posture you get from years of military service. The other is a woman in her mid-fifties — still, watchful — who is already looking at Beck from across the cafeteria.`)}
+      ${n(`The woman doesn't smile. But she nods, once, like Beck just passed a test Beck didn't know she was taking.`)}
+    `)}
+    ${btn('Sit down', "go('lunch_meeting')")}
+  `);
+},
+
+/* ---- LUNCH MEETING ---- */
+lunch_meeting() {
+  render(`
+    ${label('The Recruitment')}
+    ${dlg('Deputy Director Sterling', 'auth', `Rebecca Hawthorne. My name is Deputy Director Sterling. This is Director Kane. We work for the government — specifically, for a program you haven't heard of called Project ARGUS.`)}
+    ${dlg('Beck', '', `How did you get into my school?`)}
+    ${dlg('Sterling', 'auth', `That's a fair first question. We have authorization from the district as part of a career-development program. The visit is legitimate.`)}
+    ${dlg('Kane', 'auth', `Unlike your walk to the East Dock, which wasn't.`)}
+    ${panel('', `${n(`Silence. Beck doesn't move.`)}`)}
+    ${choices(
+      { label: '"I don\'t know what you\'re talking about."', fn: "pick('lunch_1','deny'); go('lunch_deny')" },
+      { label: '"How long have you known?"', fn: "pick('lunch_1','ask'); go('lunch_ask')" },
+      { label: '"Are you here to arrest me?"', fn: "pick('lunch_1','arrest'); go('lunch_arrest')" }
+    )}
+  `);
+},
+
+lunch_deny() {
+  render(`
+    ${label('Cafeteria — Recruitment')}
+    ${dlg('Beck', '', `I don't know what you're talking about.`)}
+    ${dlg('Kane', 'auth', `You sent forty-three photographs from a burner email to three federal agencies and a journalist. The images contained metadata from a phone model with a distinctive sensor signature. It wasn't difficult.`)}
+    ${panel('', `
+      ${n(`Beck files that away. She'd planned to strip the metadata. She hadn't.`)}
+      ${n(`Noted.`)}
+    `)}
+    ${btn('Continue', "go('lunch_argus')")}
+  `);
+},
+
+lunch_ask() {
+  render(`
+    ${label('Cafeteria — Recruitment')}
+    ${dlg('Beck', '', `How long have you known?`)}
+    ${dlg('Sterling', 'auth', `We identified you within forty-eight hours of the tip. Another week to verify your age.`)}
+    ${dlg('Kane', 'auth', `Which is when I recommended we close the file.`)}
+    ${dlg('Sterling', 'auth', `Which is when I recommended we open a conversation instead.`)}
+    ${btn('Continue', "go('lunch_argus')")}
+  `);
+},
+
+lunch_arrest() {
+  render(`
+    ${label('Cafeteria — Recruitment')}
+    ${dlg('Beck', '', `Are you here to arrest me?`)}
+    ${dlg('Sterling', 'auth', `No.`)}
+    ${dlg('Kane', 'auth', `Not today.`)}
+    ${dlg('Sterling', 'auth', `We're here to offer you something.`)}
+    ${btn('Continue', "go('lunch_argus')")}
+  `);
+},
+
+/* ---- ARGUS PITCH ---- */
+lunch_argus() {
+  render(`
+    ${label('The Pitch')}
+    ${dlg('Sterling', 'auth', `Project ARGUS is a classified program. It identifies and trains exceptional young people — sixteen and under — for intelligence work. You'd learn things. Real things. You'd work with a team of people your own age, each with different abilities.`)}
+    ${dlg('Kane', 'auth', `And for the record: I am opposed to this program in general. I'm particularly opposed to recruiting you.`)}
+    ${dlg('Beck', '', `Why?`)}
+    ${dlg('Kane', 'auth', `Because you went to an active criminal operation alone, at night, without backup, without telling anyone where you were going, and without a plan for what to do if something went wrong.`)}
+    ${dlg('Beck', '', `Something went wrong. I handled it.`)}
+    ${dlg('Kane', 'auth', `You ran from a man who outweighed you by a hundred pounds in the dark at a facility you'd never been to before.`)}
+    ${dlg('Beck', '', `And I got the evidence. And the raid happened. And those weapons are off the street.`)}
+    ${panel('', `
+      ${n(`Kane says nothing.`)}
+      ${n(`Sterling almost smiles.`)}
+    `)}
+    ${choices(
+      { label: '"What does the program actually want from me?"', fn: "pick('pitch','details'); go('lunch_details')" },
+      { label: '"You\'re right. I was reckless. I was also right. Both things are true."', fn: "pick('pitch','own_it'); go('lunch_own_it')" },
+      { label: '"My parents would never agree to this."', fn: "pick('pitch','parents'); go('lunch_parents')" }
+    )}
+  `);
+},
+
+lunch_details() {
+  render(`
+    ${label('The Details')}
+    ${dlg('Beck', '', `What does the program actually want from me?`)}
+    ${dlg('Sterling', 'auth', `Right now? Nothing. We want to know if you're interested. If you are, we arrange a conversation with your parents — full disclosure, nothing hidden. If they say no, we walk away.`)}
+    ${dlg('Kane', 'auth', `The work is observation. Analysis. You would not be placed in danger.`)}
+    ${dlg('Beck', '', `More danger than I find on my own?`)}
+    ${panel('', `${n(`Something in Kane's expression shifts. Just barely. Beck catches it.`)}`)}
+    ${btn('The question →', "go('final_choice')")}
+  `);
+},
+
+lunch_own_it() {
+  render(`
+    ${label('Accountability')}
+    ${dlg('Beck', '', `You're right. I had no business being there alone and I didn't have a real exit plan. If that second guy had been faster, it would have gone badly.`)}
+    ${panel('', `${n(`Kane's expression shifts. Barely. But Beck sees it.`)}`)}
+    ${dlg('Beck', '', `And I was right about all of it. The messages, the dock, the weapons. If I hadn't gone, those weapons would be gone and nobody would know why.`)}
+    ${dlg('Kane', 'auth', `That logic is exactly what worries me about you.`)}
+    ${dlg('Beck', '', `Good. You should be a little worried. That's how you know I'm taking it seriously.`)}
+    ${panel('', `${n(`Sterling has stopped pretending not to smile.`)}`)}
+    ${btn('The question →', "go('final_choice')")}
+  `);
+},
+
+lunch_parents() {
+  render(`
+    ${label('The Parents Question')}
+    ${dlg('Beck', '', `My parents would never agree to this.`)}
+    ${dlg('Sterling', 'auth', `Some parents say no. That's their right. We respect it completely.`)}
+    ${dlg('Kane', 'auth', `Some parents, when they understand what their child is already doing on their own, make a different calculation.`)}
+    ${panel('', `${n(`Beck thinks about the note she left on her pillow. <em>Went for a ride. Back by midnight. Don't worry.</em>`)}`)}
+    ${btn('The question →', "go('final_choice')")}
+  `);
+},
+
+/* ---- FINAL CHOICE ---- */
+final_choice() {
+  render(`
+    ${label('The Question')}
+    ${panel('', `
+      ${n(`Sterling sets a plain white card on the table. A phone number. No name. No logo.`)}
+    `)}
+    ${dlg('Sterling', 'auth', `You don't have to decide anything today. Take the card. Think about it. If you're interested, call that number. We'll arrange a meeting with your family.`)}
+    ${dlg('Kane', 'auth', `And Hawthorne.`)}
+    ${panel('', `${n(`Beck looks at her.`)}`)}
+    ${dlg('Kane', 'auth', `One day your refusal to follow orders is going to get someone killed.`)}
+    ${panel('', `${n(`A beat.`)}`)}
+    ${choices(
+      { label: '"One day blindly following orders is going to get someone killed." Push back.', fn: "pick('final','pushback'); go('ending')" },
+      { label: 'Pick up the card without saying anything. Let the action speak.', fn: "pick('final','silent'); go('ending')" },
+      { label: '"I\'ll think about it." Take the card, make no promises.', fn: "pick('final','uncertain'); go('ending')" }
+    )}
+  `);
+},
+
+/* ---- ENDING ---- */
+ending() {
+  const choice = S.choices['final'] || 'silent';
+
+  const epilogue = {
+    pushback: {
+      line: dlg('Beck', '', `One day blindly following orders is going to get someone killed.`),
+      narr: `${n(`Kane doesn't react. Sterling doesn't either.`)}
+             ${n(`But Beck has the feeling she just said something they've both been thinking for a long time.`)}
+             ${n(`She picks up the card.`)}`,
+    },
+    silent: {
+      line: '',
+      narr: `${n(`Beck picks up the card.`)}
+             ${n(`Sometimes the loudest thing you can do is not explain yourself.`)}`,
+    },
+    uncertain: {
+      line: dlg('Beck', '', `I'll think about it.`),
+      narr: `${n(`Sterling nods. Kane says nothing. They leave.`)}
+             ${n(`Beck sits with the card in her hand for a long time.`)}
+             ${n(`She thinks: <em>I should probably say no.</em>`)}
+             ${n(`She also thinks: <em>I'm definitely going to say yes.</em>`)}`,
+    },
+  }[choice];
+
+  const indyScene = S.choices['indy'] === 'full'
+    ? `${dlg('Indy', 'indy', `Okay. <em>Who were those people.</em>`)}
+       ${dlg('Beck', '', `I have absolutely no idea.`)}`
+    : S.choices['indy'] === 'deflect'
+      ? `${dlg('Indy', 'indy', `You have the look again.`)}
+         ${dlg('Beck', '', `I know.`)}`
+      : `${dlg('Indy', 'indy', `I have so many questions.`)}
+         ${dlg('Beck', '', `So do I.`)}`;
+
+  render(`
+    ${label('Chapter One — End')}
+    ${epilogue.line}
+    ${panel('', epilogue.narr)}
+    ${panel('', `
+      ${n(`Sterling and Kane leave. They walk out of the cafeteria like they were never there.`)}
+      ${n(`Indy appears from behind the soda machine where she's been pretending to check her phone for the last twelve minutes.`)}
+    `)}
+    ${indyScene}
+    ${panel('', `${n(`Beck looks at the card. Then she puts it in her pocket.`)}`)}
+    <div class="ending">
+      <p class="dm" style="font-family:monospace;font-size:10px;letter-spacing:3px;margin-bottom:20px">CHAPTER ONE: PATTERN — COMPLETE</p>
+      <div class="title-logo" style="font-size:clamp(26px,6vw,44px);margin-bottom:8px">Beck Hawthorne</div>
+      <div class="title-sub" style="margin-bottom:28px">Project Argus</div>
+      <p class="narr" style="max-width:480px;margin:0 auto 20px">
+        Three days later, she calls the number.<br>
+        Two days after that, her grandfather talks her parents into it.<br>
+        A week later, she meets five teenagers she's never heard of.<br>
+        <br>
+        That's the beginning of something else entirely.
+      </p>
+      <p class="dm" style="font-family:monospace;font-size:10px;letter-spacing:3px;margin-bottom:30px">CHAPTER TWO: TEAM — COMING SOON</p>
+      ${btn('Play Again', 'restartGame()')}
+    </div>
+  `);
+},
+
+}; // end SCENES
+
+/* ============================================================
+   RESTART
+   ============================================================ */
+window.restartGame = function() {
+  if (S.fightTimer) clearInterval(S.fightTimer);
+  Object.assign(S, { scene: 'title', choices: {}, fightWins: 0, fightRound: 0, fightTimer: null, cluesFound: 0 });
+  Object.values(EVIDENCE).forEach(e => e.found = false);
+  DOCK_AREAS.forEach(a => a.explored = false);
+  go('title');
+};
+
+/* ============================================================
+   EXPOSE GLOBALS AND START
+   ============================================================ */
+window.go   = go;
+window.pick = pick;
+
+go('title');
+</script>
+</body>
+</html>
