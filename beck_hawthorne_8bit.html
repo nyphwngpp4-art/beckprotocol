@@ -140,8 +140,8 @@ dock: {
     [DB,MW,MW,MW,MW,MW,MW,MW,DF,DF,DF,DF,DF,MW,MW,MW,MW,MW,MW,MW,DF,DB],
     [DB,MW,SH,SH,SH,SH,SH,MW,DF,DF,DF,DF,DF,MW,SH,SH,SH,EC,SH,MW,DF,DB],
     [DB,MW,SH,SH,SH,SH,SH,MW,DF,DF,DF,DF,DF,MW,SH,SH,SH,SH,SH,MW,DF,DB],
-    [DB,MW,MW,MW,MW,MW,MW,MW,DF,DF,DF,DF,DF,MW,MW,MW,MW,MW,MW,MW,DF,DB],
-    [DB,DF,DF,EC,CR,CR,CR,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DB],
+    [DB,MW,MW,MW,MW,MW,MW,MW,DF,DF,DF,DF,DF,MW,MW,MW,MW,DF,MW,MW,DF,DB],
+    [DB,DF,DF,EC,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DF,DB],
     [DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB,DB],
   ],
   items:[
@@ -523,34 +523,43 @@ function drawBeck(sx, sy, dir, fr) {
   ctx.save();
 
   // ── HAIR CURTAINS (behind everything) ───────────────────
-  ctx.fillStyle = HA;
-  ctx.beginPath();   // left curtain
-  ctx.moveTo(sx+3, sy+3);
-  ctx.quadraticCurveTo(sx-1, sy+9, sx+1, sy+21);
-  ctx.quadraticCurveTo(sx+2, sy+23, sx+5, sy+21);
-  ctx.quadraticCurveTo(sx+4, sy+11, sx+5, sy+4);
-  ctx.closePath(); ctx.fill();
+  // Side views: only the curtain on the "behind" side is visible
+  const showLeftCurtain  = (dir !== 'left');   // facing left = hair trails right, left curtain hidden
+  const showRightCurtain = (dir !== 'right');  // facing right = hair trails left, right curtain hidden
 
-  ctx.beginPath();   // right curtain
-  ctx.moveTo(sx+11, sy+3);
-  ctx.quadraticCurveTo(sx+15, sy+9, sx+13, sy+21);
-  ctx.quadraticCurveTo(sx+12, sy+23, sx+9, sy+21);
-  ctx.quadraticCurveTo(sx+10, sy+11, sx+9, sy+4);
-  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = HA;
+  if (showLeftCurtain) {
+    ctx.beginPath();
+    ctx.moveTo(sx+3, sy+3);
+    ctx.quadraticCurveTo(sx-1, sy+9, sx+1, sy+21);
+    ctx.quadraticCurveTo(sx+2, sy+23, sx+5, sy+21);
+    ctx.quadraticCurveTo(sx+4, sy+11, sx+5, sy+4);
+    ctx.closePath(); ctx.fill();
+  }
+  if (showRightCurtain) {
+    ctx.beginPath();
+    ctx.moveTo(sx+11, sy+3);
+    ctx.quadraticCurveTo(sx+15, sy+9, sx+13, sy+21);
+    ctx.quadraticCurveTo(sx+12, sy+23, sx+9, sy+21);
+    ctx.quadraticCurveTo(sx+10, sy+11, sx+9, sy+4);
+    ctx.closePath(); ctx.fill();
+  }
 
   // Hair crown (top of head, behind face)
   ctx.beginPath();
   ctx.ellipse(sx+7, sy+5, 6, 5, 0, Math.PI, 0);
   ctx.fill();
 
-  // Hair highlight streak (centre part)
-  ctx.fillStyle = HB;
-  ctx.beginPath();
-  ctx.moveTo(sx+6, sy+3);
-  ctx.quadraticCurveTo(sx+6.5, sy+12, sx+7, sy+16);
-  ctx.lineTo(sx+8, sy+16);
-  ctx.quadraticCurveTo(sx+7.5, sy+12, sx+8, sy+3);
-  ctx.closePath(); ctx.fill();
+  // Centre-part highlight streak (front/back views only)
+  if (dir === 'down' || dir === 'up') {
+    ctx.fillStyle = HB;
+    ctx.beginPath();
+    ctx.moveTo(sx+6, sy+3);
+    ctx.quadraticCurveTo(sx+6.5, sy+12, sx+7, sy+16);
+    ctx.lineTo(sx+8, sy+16);
+    ctx.quadraticCurveTo(sx+7.5, sy+12, sx+8, sy+3);
+    ctx.closePath(); ctx.fill();
+  }
 
   // ── HEAD ────────────────────────────────────────────────
   if (dir === 'up') {
