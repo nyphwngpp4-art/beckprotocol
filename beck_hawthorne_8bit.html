@@ -1497,9 +1497,6 @@ function loop() {
       break;
   }
 
-  // Clear justPressed
-  for (const k in justPressed) delete justPressed[k];
-
   // --- DRAW ---
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, GW, GH);
@@ -1515,7 +1512,7 @@ function loop() {
     const map = MAPS[game.mapId];
     map.npcs.forEach(drawNPC);
 
-    // Draw player (not during pure cutscene)
+    // Draw player
     drawPlayer();
 
     // Dialogue box
@@ -1526,6 +1523,9 @@ function loop() {
 
     drawHUD();
   }
+
+  // Clear justPressed AFTER drawing so title/ending screens can read it
+  for (const k in justPressed) delete justPressed[k];
 
   requestAnimationFrame(loop);
 }
