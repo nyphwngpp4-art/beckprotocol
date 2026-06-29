@@ -514,124 +514,165 @@ function drawDialogueBox() {
 function drawBeck(sx, sy, dir, fr) {
   if (pl.invincible > 0 && Math.floor(game.frame / 4) % 2) return;
 
-  function r(x, y, w, h, c) {
-    ctx.fillStyle = c;
-    ctx.fillRect(sx + x, sy + y, w, h);
-  }
+  const HA = '#7A4015';  // hair dark brown
+  const HB = '#A05828';  // hair highlight
+  const HC = '#3C1E08';  // hair shadow / eyebrow
+  const SK = '#F2B898';  // skin
+  const EY = '#4A2808';  // brown iris
+  const EW = '#F4F0E8';  // eye white
+  const HO = '#009888';  // teal hoodie
+  const HS = '#006860';  // hoodie shadow
+  const JN = '#2A52B0';  // jeans
+  const SH = '#1E1208';  // shoes
 
-  // colour palette
-  const HA = '#6C4018'; // hair brown (mid)
-  const HB = '#8C5820'; // hair highlight
-  const HC = '#3C2008'; // hair shadow / dark
-  const SK = '#F0B090'; // skin
-  const S2 = '#D8987A'; // skin shadow
-  const EY = '#4C2A0A'; // iris (warm dark brown)
-  const EW = '#F8F8F0'; // eye white
-  const LB = '#5C3210'; // eyebrow
-  const HO = '#009888'; // hoodie teal
-  const HS = '#006858'; // hoodie shadow
-  const JN = '#2858B0'; // jeans
-  const JS = '#18387A'; // jeans seam
-  const SH = '#281A08'; // shoes dark
+  ctx.save();
 
-  // ── LONG HAIR (drawn first — behind everything) ──────────
-  // Crown / top
-  r(3,0,  8,2, HA);
-  r(2,1, 10,1, HA);
-  r(5,0,  4,1, HB);   // centre-part highlight
+  // ── HAIR CURTAINS (behind everything) ───────────────────
+  ctx.fillStyle = HA;
+  ctx.beginPath();   // left curtain
+  ctx.moveTo(sx+3, sy+3);
+  ctx.quadraticCurveTo(sx-1, sy+9, sx+1, sy+21);
+  ctx.quadraticCurveTo(sx+2, sy+23, sx+5, sy+21);
+  ctx.quadraticCurveTo(sx+4, sy+11, sx+5, sy+4);
+  ctx.closePath(); ctx.fill();
 
-  // Hair curtains — fall all the way to mid-torso (row 22)
-  // This is what makes the "long" read clearly
-  r(0, 2,  3, 21, HA);   // left curtain
-  r(11,2,  3, 21, HA);   // right curtain
-  r(1, 3,  1, 16, HB);   // left strand highlight
-  r(12,3,  1, 16, HB);   // right strand highlight
-  r(0,17,  2,  6, HC);   // lower shadow — left
-  r(12,17, 2,  6, HC);   // lower shadow — right
+  ctx.beginPath();   // right curtain
+  ctx.moveTo(sx+11, sy+3);
+  ctx.quadraticCurveTo(sx+15, sy+9, sx+13, sy+21);
+  ctx.quadraticCurveTo(sx+12, sy+23, sx+9, sy+21);
+  ctx.quadraticCurveTo(sx+10, sy+11, sx+9, sy+4);
+  ctx.closePath(); ctx.fill();
 
-  // Wavy hair ends at bottom
-  r(0,23,  2,2, HA); r(2,24,1,1, HC);
-  r(12,23, 2,2, HA); r(11,24,1,1, HC);
+  // Hair crown (top of head, behind face)
+  ctx.beginPath();
+  ctx.ellipse(sx+7, sy+5, 6, 5, 0, Math.PI, 0);
+  ctx.fill();
 
-  // ── FACE / HEAD ─────────────────────────────────────────
+  // Hair highlight streak (centre part)
+  ctx.fillStyle = HB;
+  ctx.beginPath();
+  ctx.moveTo(sx+6, sy+3);
+  ctx.quadraticCurveTo(sx+6.5, sy+12, sx+7, sy+16);
+  ctx.lineTo(sx+8, sy+16);
+  ctx.quadraticCurveTo(sx+7.5, sy+12, sx+8, sy+3);
+  ctx.closePath(); ctx.fill();
+
+  // ── HEAD ────────────────────────────────────────────────
   if (dir === 'up') {
-    // Back of head — only hair visible
-    r(3,2, 8,9, HA);
-    r(4,3, 6,6, HC);
-    r(5,4, 4,3, HB);
+    // Back of head — all hair
+    ctx.fillStyle = HA;
+    ctx.beginPath();
+    ctx.ellipse(sx+7, sy+7, 4.5, 5.5, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = HB;  // centre-part line
+    ctx.fillRect(sx+6, sy+2, 2, 8);
   } else {
-    // Face (sits inside the hair curtains)
-    r(3,2, 8,9, SK);
-    r(3,2, 8,1, HA);   // hairline
-    r(4,2, 6,1, SK);   // forehead shows through part
+    // Face (skin)
+    ctx.fillStyle = SK;
+    ctx.beginPath();
+    ctx.ellipse(sx+7, sy+7, 4.5, 5.5, 0, 0, Math.PI*2);
+    ctx.fill();
 
-    // Jaw shading
-    r(3,9,1,1,S2); r(10,9,1,1,S2);
+    // Subtle cheek blush
+    ctx.fillStyle = 'rgba(220,130,110,0.25)';
+    ctx.beginPath(); ctx.ellipse(sx+3.5, sy+9, 1.5, 1, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx+10.5,sy+9, 1.5, 1, 0, 0, Math.PI*2); ctx.fill();
 
+    // ── FACIAL FEATURES ─────────────────────────────────
     if (dir === 'down') {
-      // Eyebrows — 2px each, inset from edges, clear gap between
-      r(4,4, 2,1, LB); r(8,4, 2,1, LB);
+      // Eyebrows
+      ctx.strokeStyle = HC; ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.moveTo(sx+3.2,sy+5.2); ctx.quadraticCurveTo(sx+4.5,sy+4.8,sx+5.8,sy+5.2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx+8.2,sy+5.2); ctx.quadraticCurveTo(sx+9.5,sy+4.8,sx+10.8,sy+5.2); ctx.stroke();
 
-      // Left eye (x=4-5, 2px wide)
-      r(4,5, 2,3, EW);         // eye white
-      r(4,5, 2,1, HC);         // top lash
-      r(4,6, 1,1, EY);         // brown iris
+      // Left eye — ellipse with iris
+      ctx.fillStyle = EW;
+      ctx.beginPath(); ctx.ellipse(sx+4.5, sy+7, 1.7, 1.2, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = EY;
+      ctx.beginPath(); ctx.arc(sx+4.5, sy+7.2, 0.85, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = HC; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.ellipse(sx+4.5, sy+7, 1.7, 1.2, 0, Math.PI, 0); ctx.stroke();
 
-      // Right eye (x=8-9, 2px wide — clear 2px nose bridge at x=6-7)
-      r(8,5, 2,3, EW);
-      r(8,5, 2,1, HC);
-      r(8,6, 1,1, EY);
+      // Right eye — clear gap from left (4.5 vs 9.5 = 5px apart)
+      ctx.fillStyle = EW;
+      ctx.beginPath(); ctx.ellipse(sx+9.5, sy+7, 1.7, 1.2, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = EY;
+      ctx.beginPath(); ctx.arc(sx+9.5, sy+7.2, 0.85, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = HC; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.ellipse(sx+9.5, sy+7, 1.7, 1.2, 0, Math.PI, 0); ctx.stroke();
 
-      r(6,8, 2,1, S2);          // nose shadow
-      r(5,9, 4,1, '#C07878');  // mouth
-      r(6,9, 2,1, '#D89898');
+      // Nose (very subtle)
+      ctx.strokeStyle = 'rgba(180,100,80,0.45)'; ctx.lineWidth = 0.6;
+      ctx.beginPath(); ctx.moveTo(sx+6.2,sy+9); ctx.lineTo(sx+7,sy+9.8); ctx.lineTo(sx+7.8,sy+9); ctx.stroke();
+
+      // Mouth
+      ctx.strokeStyle = '#C08878'; ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.moveTo(sx+5.5,sy+11.2); ctx.quadraticCurveTo(sx+7,sy+12.5,sx+8.5,sy+11.2); ctx.stroke();
 
     } else if (dir === 'left') {
-      r(3,4, 2,1, LB);           // brow
-      r(3,5, 3,2, EW);           // eye
-      r(3,5, 3,1, HC);           // lash
-      r(4,6, 1,1, EY);           // iris
-      r(3,8, 2,1, S2);           // nose
-      r(3,9, 3,1, '#C07878');    // mouth
+      ctx.strokeStyle = HC; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(sx+3,sy+5.2); ctx.quadraticCurveTo(sx+4.5,sy+4.8,sx+6,sy+5.2); ctx.stroke();
+      ctx.fillStyle = EW;
+      ctx.beginPath(); ctx.ellipse(sx+4, sy+7, 1.5, 1, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = EY;
+      ctx.beginPath(); ctx.arc(sx+3.5, sy+7.2, 0.75, 0, Math.PI*2); ctx.fill();
 
-    } else {                      // right
-      r(9,4, 2,1, LB);
-      r(8,5, 3,2, EW);
-      r(8,5, 3,1, HC);
-      r(9,6, 1,1, EY);
-      r(9,8, 2,1, S2);
-      r(8,9, 3,1, '#C07878');
+    } else { // right
+      ctx.strokeStyle = HC; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(sx+8,sy+5.2); ctx.quadraticCurveTo(sx+9.5,sy+4.8,sx+11,sy+5.2); ctx.stroke();
+      ctx.fillStyle = EW;
+      ctx.beginPath(); ctx.ellipse(sx+10, sy+7, 1.5, 1, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = EY;
+      ctx.beginPath(); ctx.arc(sx+10.5, sy+7.2, 0.75, 0, Math.PI*2); ctx.fill();
     }
   }
 
   // ── NECK ────────────────────────────────────────────────
-  if (dir !== 'up') r(5,11, 4,2, SK);
+  if (dir !== 'up') { ctx.fillStyle = SK; ctx.fillRect(sx+5, sy+12, 4, 3); }
 
-  // ── HOODIE (teal) ────────────────────────────────────────
-  r(5,12, 4,1, HS);     // collar
-  r(3,13, 8,8, HO);     // torso
-  r(6,13, 2,8, HS);     // centre seam / zip
-  r(3,19, 8,2, HS);     // hem band
+  // ── HOODIE ──────────────────────────────────────────────
+  ctx.fillStyle = HO;
+  ctx.beginPath();  // torso with slight taper = waist
+  ctx.moveTo(sx+2, sy+15);
+  ctx.lineTo(sx+12, sy+15);
+  ctx.lineTo(sx+11, sy+24);
+  ctx.lineTo(sx+3, sy+24);
+  ctx.closePath(); ctx.fill();
 
-  // Arms — alternate swing with walk frame
+  // Collar V
+  ctx.fillStyle = HS;
+  ctx.beginPath();
+  ctx.moveTo(sx+5, sy+14); ctx.lineTo(sx+9, sy+14); ctx.lineTo(sx+7, sy+17);
+  ctx.closePath(); ctx.fill();
+  ctx.fillRect(sx+6, sy+17, 2, 7);  // zip seam
+
+  // Arms (walk animation)
   const aO = fr ? 1 : 0;
-  r(1, 13-aO, 2,8, HO);   // left arm
-  r(11,13+aO, 2,8, HO);   // right arm
-  r(1, 20-aO, 2,2, SK);   // left hand
-  r(11,20+aO, 2,2, SK);   // right hand
+  ctx.fillStyle = HO;
+  ctx.fillRect(sx,   sy+15-aO, 2, 8);
+  ctx.fillRect(sx+12,sy+15+aO, 2, 8);
+
+  // Hands (round)
+  ctx.fillStyle = SK;
+  ctx.beginPath(); ctx.arc(sx+1,   sy+23-aO, 1.4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(sx+13,  sy+23+aO, 1.4, 0, Math.PI*2); ctx.fill();
 
   // ── JEANS ───────────────────────────────────────────────
-  r(3,21, 8,4, JN);
-  r(6,21, 2,4, JS);
+  ctx.fillStyle = JN; ctx.fillRect(sx+3, sy+24, 8, 4);
+  ctx.fillStyle = '#1A3878'; ctx.fillRect(sx+6, sy+24, 2, 4);
 
-  // Legs — stride animation
+  // Legs (stride animation)
   const lO = fr ? 1 : 0;
-  r(3, 24, 3, 4+lO,   JN);
-  r(8, 24, 3, 4-lO+1, JN);
+  ctx.fillStyle = JN;
+  ctx.fillRect(sx+3, sy+28, 3, 3+lO);
+  ctx.fillRect(sx+8, sy+28, 3, 4-lO);
 
   // ── SHOES ───────────────────────────────────────────────
-  r(2, 27+lO, 5, 2, SH);
-  r(7, 28-lO, 5, 2, SH);
+  ctx.fillStyle = SH;
+  ctx.fillRect(sx+2, sy+31+lO, 5, 2);
+  ctx.fillRect(sx+7, sy+32-lO, 5, 2);
+
+  ctx.restore();
 }
 
 // ── NPC sprites (simpler but distinct) ──────────────────────
@@ -696,9 +737,8 @@ function drawNPCChar(sx, sy, npc, fr) {
 }
 
 function drawPlayer() {
-  // Sprite is 14×30; feet should sit at pl.y + pl.h
   const sx = pl.x - cam.x - 1;
-  const sy = pl.y - cam.y - 18;
+  const sy = pl.y - cam.y - 20;  // feet align at sy+32 = pl.y+pl.h
   // Ground shadow at foot level
   px(sx+2, pl.y - cam.y + pl.h, 11, 2, 'rgba(0,0,0,0.35)');
   drawBeck(sx, sy, pl.dir, pl.frame);
@@ -1171,7 +1211,7 @@ function showDamageFlash() { damageFlash = 15; }
 // HUD
 // ============================================================
 function drawHUD() {
-  if (game.state === 'TITLE' || game.state === 'ENDING') return;
+  if (['TITLE','ENDING','INTRO','CHAPTER_CARD'].includes(game.state)) return;
 
   // Hearts
   for (let i = 0; i < pl.maxHearts; i++) {
@@ -1498,6 +1538,174 @@ function drawPuzzle() {
 }
 
 // ============================================================
+// INTRO SLIDES — cinematic backstory before gameplay
+// ============================================================
+const INTRO_SLIDES = [
+  {
+    location: 'DENVER, COLORADO',
+    lines: [
+      "Beck Hawthorne is 15 years old.",
+      '',
+      "She's never been in trouble.",
+      "She's never left the country.",
+      "She's never touched a weapon.",
+      '',
+      "That's all about to change.",
+    ],
+  },
+  {
+    lines: [
+      "For two years, she has played",
+      "★ PATTERN LOCK ★",
+      "an online puzzle game.",
+      '',
+      "She is ranked #4 in the world.",
+      '',
+      "She solves in seconds what",
+      "experts take hours to crack.",
+    ],
+  },
+  {
+    highlight: "What Beck doesn't know:",
+    lines: [
+      "Some of those puzzles",
+      "aren't really puzzles.",
+      '',
+      "They're dead drops.",
+      "Real messages. Hidden in plain",
+      "sight. Used by arms dealers",
+      "and people who stay invisible.",
+    ],
+  },
+  {
+    highlight: "What she also doesn't know:",
+    lines: [
+      "For the past six months,",
+      "the CIA has been",
+      "watching her play.",
+      '',
+      "Tonight, that changes.",
+    ],
+  },
+];
+
+const intro = { slide: 0, timer: 0 };
+
+function updateIntro() {
+  intro.timer++;
+  if (justPressed['KeyZ'] || justPressed['Space'] || intro.timer > 300) {
+    intro.timer = 0;
+    intro.slide++;
+    if (intro.slide >= INTRO_SLIDES.length) {
+      game.state = 'CHAPTER_CARD';
+    }
+  }
+}
+
+function updateChapterCard() {
+  intro.timer++;
+  if (justPressed['KeyZ'] || intro.timer > 200) {
+    loadScene('bedroom');
+  }
+}
+
+function drawIntro() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  // Subtle background stars
+  [[20,15],[80,8],[140,20],[200,12],[35,45],[180,35],[100,55],[230,22]].forEach(([x,y]) => {
+    const b = (Math.floor(game.frame/80) + Math.floor(x/50)) % 2;
+    px(x, y, 1, 1, b ? '#555' : '#333');
+  });
+
+  const slide = INTRO_SLIDES[intro.slide];
+  if (!slide) return;
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  let y = 22;
+
+  if (slide.location) {
+    ctx.fillStyle = P.YEL;
+    ctx.font = '8px monospace';
+    ctx.fillText(slide.location, GW/2, y);
+    y += 14;
+    ctx.fillStyle = '#8899AA';
+    ctx.font = '6px monospace';
+    ctx.fillText('Present Day', GW/2, y);
+    y += 16;
+    px(22, y, GW-44, 1, '#333344');
+    y += 12;
+  }
+
+  if (slide.highlight) {
+    ctx.fillStyle = P.TEL;
+    ctx.font = '7px monospace';
+    ctx.fillText(slide.highlight, GW/2, y);
+    y += 18;
+    px(22, y-6, GW-44, 1, '#1A2A3A');
+    y += 4;
+  }
+
+  slide.lines.forEach(line => {
+    if (line === '') { y += 8; return; }
+    const special = line.includes('PATTERN LOCK');
+    ctx.fillStyle = special ? P.TEL : P.WHT;
+    ctx.font = `${special ? 7 : 6}px monospace`;
+    ctx.fillText(line, GW/2, y);
+    y += special ? 14 : 12;
+  });
+
+  ctx.restore();
+
+  // Progress dots at bottom
+  const n = INTRO_SLIDES.length;
+  for (let i = 0; i < n; i++) {
+    px(GW/2 - n*4 + i*8, GH-16, 5, 3, i === intro.slide ? P.WHT : '#444');
+  }
+
+  // "Next" hint (blinks)
+  if (Math.floor(game.frame/28)%2===0)
+    drawText('[Z] NEXT', GW-58, GH-8, '#555566', 6);
+}
+
+function drawChapterCard() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  const alpha = Math.min(1, intro.timer / 50);
+  ctx.globalAlpha = alpha;
+
+  px(0, GH/2-26, GW, 52, '#080818');
+  px(0, GH/2-26, GW, 1, P.TEL);
+  px(0, GH/2+26, GW, 1, P.TEL);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8899AA';
+  ctx.font = '6px monospace';
+  ctx.fillText('C H A P T E R   O N E', GW/2, GH/2-10);
+  ctx.fillStyle = P.WHT;
+  ctx.font = '9px monospace';
+  ctx.fillText('The Pattern', GW/2, GH/2+9);
+  ctx.restore();
+
+  ctx.globalAlpha = 1;
+
+  if (intro.timer > 140 && Math.floor(game.frame/28)%2===0) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    ctx.font = '6px monospace';
+    ctx.fillText('[Z] BEGIN', GW/2, GH-12);
+    ctx.restore();
+  }
+}
+
+// ============================================================
 // TITLE SCREEN
 // ============================================================
 function drawTitle() {
@@ -1535,7 +1743,8 @@ function drawTitle() {
   drawText('© BECK HAWTHORNE: ORIGIN  2024', 30, 225, '#303030', 5);
 
   if (justPressed['KeyZ'] || justPressed['KeyX'] || justPressed['Space']) {
-    loadScene('bedroom');
+    intro.slide = 0; intro.timer = 0;
+    game.state = 'INTRO';
   }
 }
 
@@ -1619,6 +1828,7 @@ function restartGame() {
     state:'TITLE', frame:0, mapId:'bedroom',
     evidenceFound:[], choices:{}, dockChaseActive:false,
   });
+  intro.slide = 0; intro.timer = 0;
   Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
   // Reset dock npcs
   MAPS['dock'].npcs.forEach(n => { n.active=false; n.x=15*TW; n.y=5*TH; });
@@ -1637,6 +1847,12 @@ function loop() {
   // --- UPDATE ---
   switch (game.state) {
     case 'TITLE':
+      break;
+    case 'INTRO':
+      updateIntro();
+      break;
+    case 'CHAPTER_CARD':
+      updateChapterCard();
       break;
     case 'EXPLORE':
       updatePlayer();
@@ -1666,6 +1882,10 @@ function loop() {
 
   if (game.state === 'TITLE') {
     drawTitle();
+  } else if (game.state === 'INTRO') {
+    drawIntro();
+  } else if (game.state === 'CHAPTER_CARD') {
+    drawChapterCard();
   } else if (game.state === 'ENDING') {
     drawEnding();
   } else {
