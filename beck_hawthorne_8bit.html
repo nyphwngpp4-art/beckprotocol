@@ -119,7 +119,6 @@ bedroom: {
     {tx:9, ty:6, id:'computer', label:'[Z] Pattern Lock'},
   ],
   npcs:[],
-  nextScene:'',
 },
 
 dock: {
@@ -152,9 +151,8 @@ dock: {
   ],
   npcs:[
     {x:15*TW, y:12*TH, id:'smuggler', col:P.RED, w:14, h:14,
-     dir:'down', speed:0.85, active:false, isCopy:false, cooldown:0},
+     dir:'down', speed:0.85, active:false, cooldown:0},
   ],
-  nextScene:'school',
 },
 
 school: {
@@ -178,12 +176,11 @@ school: {
   items:[],
   npcs:[
     {x:6*TW, y:5*TH, id:'indy', col:P.PNK, w:12, h:14, dir:'right',
-     speed:0, active:true, isCopy:false, cooldown:0},
+     speed:0, active:true, cooldown:0},
     // arrow marker
     {x:18*TW, y:5*TH, id:'cafe_arrow', col:P.YEL, w:12, h:12,
-     dir:'right', speed:0, active:true, isCopy:false, cooldown:0},
+     dir:'right', speed:0, active:true, cooldown:0},
   ],
-  nextScene:'cafeteria',
 },
 
 cafeteria: {
@@ -210,11 +207,10 @@ cafeteria: {
   items:[],
   npcs:[
     {x:8*TW,  y:3*TH, id:'sterling', col:P.LBLU, w:12, h:14,
-     dir:'down', speed:0, active:true, isCopy:false, cooldown:0},
+     dir:'down', speed:0, active:true, cooldown:0},
     {x:10*TW, y:3*TH, id:'kane',     col:P.LGRY, w:12, h:14,
-     dir:'down', speed:0, active:true, isCopy:false, cooldown:0},
+     dir:'down', speed:0, active:true, cooldown:0},
   ],
-  nextScene:'ending',
 },
 
 };
@@ -969,7 +965,7 @@ function startIndyDialogue() {
       {text:'"You know the East Dock raid on the news?"',
        pick:['indy','full'],
        jump:'indy_full'},
-    ], choiceIdx:0},
+    ]},
     {label:'indy_deflect',
      speaker:'BECK', col:P.TEL, text:"I'm just tired."},
     {speaker:'INDY', col:P.PNK, text:"You're the worst liar I've ever met and I've known you seven years."},
@@ -1243,7 +1239,6 @@ function checkCafeArrow() {
 const puzzle = {
   active: false,
   phase: 0,    // 0=puzzle1, 1=puzzle2, 2=anomaly, 3=done
-  round: 0,
   selected: 0,
   cluesFound: 0,
   cluesSel: 0, // which anomaly clue is cursor on
@@ -1776,9 +1771,6 @@ function restartGame() {
   MAPS['dock'].npcs.forEach(n => { n.active=false; n.x=15*TW; n.y=5*TH; });
   game.frame = 0;
 }
-
-// puzzle box inner height constant
-const hh = GH - 20;
 
 // ============================================================
 // MAIN GAME LOOP
