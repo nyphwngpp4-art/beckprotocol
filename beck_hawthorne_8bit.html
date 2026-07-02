@@ -469,6 +469,7 @@ const game = {
   pausedFrom: null,    // state to return to when PAUSED is closed
   objective: '',
   objectiveBannerTimer: 0,
+  shadowTaught: false, // M3-T3: has the "Shadows hide you." toast fired yet?
 };
 
 // Player
@@ -614,6 +615,27 @@ function drawObjectiveBanner() {
   px(bx2, y+10, bw2, 2, P.YEL);
   drawText(label, bx2+6, y+9, P.YEL, 6);
   game.objectiveBannerTimer--;
+}
+
+// One-line toast (e.g. "Shadows hide you.") — a fixed box low on
+// screen, distinct from the top-sliding objective banner.
+const TOAST_FRAMES = 150; // 2.5s
+const toast = { text: '', timer: 0 };
+
+function showToast(text) {
+  toast.text = text;
+  toast.timer = TOAST_FRAMES;
+}
+
+function drawToast() {
+  if (toast.timer <= 0) return;
+  const tw2 = toast.text.length * 6 + 10;
+  const bx2 = Math.floor(GW/2 - tw2/2);
+  const by2 = GH - 34;
+  px(bx2, by2, tw2, 12, P.BLK);
+  px(bx2, by2+10, tw2, 2, P.TEL);
+  drawText(toast.text, bx2+5, by2+9, P.TEL, 6);
+  toast.timer--;
 }
 
 // ============================================================
@@ -1006,7 +1028,10 @@ function drawPlayer() {
   const sy = pl.y - cam.y - 14;  // feet align at sy+27 ≈ pl.y+pl.h
   // Ground shadow at foot level
   px(sx+2, pl.y - cam.y + pl.h, 11, 2, 'rgba(0,0,0,0.35)');
+  const hidden = playerInShadow();
+  if (hidden) ctx.globalAlpha = 0.6;
   drawBeck(sx, sy, pl.dir, pl.frame);
+  if (hidden) ctx.globalAlpha = 1;
   if (heartRestoreTimer > 0) {
     if (Math.floor(heartRestoreTimer/4) % 2 === 0)
       drawText('+', sx+4, sy-2, '#30E060', 8);
@@ -1578,7 +1603,27 @@ function pursuePlayer(g, speed) {
 }
 
 // Facing cone + step-every-4px line of sight; blocked by any solid tile.
+// Standing on a shadow tile (SH) hides Beck from every guard's cone.
+function playerInShadow() {
+  const map = MAPS[game.mapId];
+  const tx = Math.floor((pl.x + pl.w/2) / TW);
+  const ty = Math.floor((pl.y + pl.h/2) / TH);
+  const row = map.rows[ty];
+  return !!row && row[tx] === SH;
+}
+
+let wasInShadow = false;
+function updateShadowTeach() {
+  const inShadow = playerInShadow();
+  if (inShadow && !wasInShadow && !game.shadowTaught) {
+    game.shadowTaught = true;
+    showToast('Shadows hide you.');
+  }
+  wasInShadow = inShadow;
+}
+
 function guardSeesPlayer(g) {
+  if (playerInShadow()) return false;
   const gx = g.x + g.w/2, gy = g.y + g.h/2;
   const tx = pl.x + pl.w/2, ty = pl.y + pl.h/2;
   const dx = tx - gx, dy = ty - gy;
@@ -2557,6 +2602,7 @@ function restartGame() {
   Object.assign(game, {
     state:'TITLE', frame:0, mapId:'bedroom',
     evidenceFound:[], choices:{}, dockChaseActive:false, pausedFrom:null,
+    shadowTaught:false,
   });
   setObjective('Solve the Pattern Lock puzzle on your computer.', true);
   intro.slide = 0; intro.timer = 0;
@@ -2611,6 +2657,7 @@ function loop() {
     case 'EXPLORE':
       updatePlayer();
       updateGuards();
+      updateShadowTeach();
       checkInteract();
       checkCafeArrow();
       updateCam();
@@ -2686,6 +2733,7 @@ function loop() {
   }
 
   drawObjectiveBanner();
+  drawToast();
   drawMuteGlyph();
   transition.draw();
 
