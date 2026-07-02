@@ -85,6 +85,11 @@ const T = {
   19:{c:'#504030',s:1},  // cafeteria table
   20:{c:'#302818',s:1},  // dark dock border
   21:{c:'#484848',s:1},  // wall (school/cafe)
+  22:{c:P.WLCL,   s:1},  // bedroom wall — PATTERN LOCK poster (M4-T3)
+  23:{c:P.SCHW,   s:1},  // school wall — hallway door (M4-T1)
+  24:{c:P.SCHW,   s:1},  // school wall — bulletin board (M4-T1)
+  25:{c:P.LOC,    s:1},  // school — trophy case (M4-T1)
+  26:{c:P.SCHW,   s:1},  // cafeteria wall — lunch line counter (M4-T2)
 };
 
 // ============================================================
@@ -93,7 +98,8 @@ const T = {
 const W0=0,BF=1,BD=2,DK=3,CO=4,WN=5,BS=6,DR=7, // bedroom
       DF=8,CR=9,MW=10,FN=11,EX=12,               // dock
       SF=13,SW=14,LK=15,EC=16,SH=17,CF=18,CT=19, // school/cafe
-      DB=20,MT=21;                                 // misc
+      DB=20,MT=21,                                 // misc
+      PO=22,SD=23,BB=24,TR=25,LC=26;               // M4 dressing (bedroom/school/cafe)
 
 const MAPS = {
 
@@ -103,7 +109,7 @@ bedroom: {
   playerSpawn:{x:7*TW+8, y:8*TH},
   bgCol:'#04030C',
   rows:[
-    [W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0],
+    [W0,W0,W0,W0,W0,W0,W0,W0,PO,PO,PO,W0,W0,W0,W0,W0],
     [W0,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
     [W0,BD,BD,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,WN,WN,W0],
     [W0,BD,BD,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
@@ -117,6 +123,12 @@ bedroom: {
   ],
   items:[
     {tx:9, ty:6, id:'computer', label:'[Z] Pattern Lock'},
+    {tx:1, ty:2, id:'bed', label:'[Z] Inspect bed', flavor:true,
+     text:"Still unmade. Some things don't change."},
+    {tx:9, ty:5, id:'bookshelf', label:'[Z] Inspect bookshelf', flavor:true,
+     text:'Spy novels, physics textbooks, and one very embarrassing diary from sixth grade.'},
+    {tx:13, ty:2, id:'window', label:'[Z] Look outside', flavor:true,
+     text:'Rain again. Good thinking weather.'},
   ],
   npcs:[],
 },
@@ -176,9 +188,9 @@ school: {
   playerSpawn:{x:2*TW, y:5*TH},
   bgCol:'#1C1410',
   rows:[
-    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,SW,SW,BB,SW,SW,SW,SW,SD,SD,SW,SW,SW,SW,BB,SW,SW,SW,SW,SW],
     [SW,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SW],
-    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,TR],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
@@ -186,7 +198,7 @@ school: {
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [SW,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SW],
-    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,SW,SW,SW,SW,SD,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
   ],
   items:[],
   npcs:[
@@ -195,6 +207,19 @@ school: {
     // arrow marker
     {x:18*TW, y:5*TH, id:'cafe_arrow', col:P.YEL, w:12, h:12,
      dir:'right', speed:0, active:true, cooldown:0},
+    // Wandering student NPCs — random-waypoint, non-interactive flavor
+    // one-liners (M4-T1). Bounds kept well inside the open floor
+    // (cols 2-17, rows 2-8) so rectSolid() never needs to route them
+    // around lockers or the border walls.
+    {x:4*TW, y:3*TH, id:'student1', col:P.LGRN, w:12, h:14, dir:'down',
+     speed:0, active:true, cooldown:0, wander:true, wanderSpeed:0.35,
+     wanderBounds:{x0:2*TW, y0:2*TH, x1:17*TW, y1:8*TH}, wanderPause:0},
+    {x:10*TW, y:7*TH, id:'student2', col:P.LBLU, w:12, h:14, dir:'up',
+     speed:0, active:true, cooldown:0, wander:true, wanderSpeed:0.3,
+     wanderBounds:{x0:2*TW, y0:2*TH, x1:17*TW, y1:8*TH}, wanderPause:40},
+    {x:14*TW, y:4*TH, id:'student3', col:P.AMB, w:12, h:14, dir:'left',
+     speed:0, active:true, cooldown:0, wander:true, wanderSpeed:0.32,
+     wanderBounds:{x0:2*TW, y0:2*TH, x1:17*TW, y1:8*TH}, wanderPause:90},
   ],
 },
 
@@ -204,7 +229,7 @@ cafeteria: {
   playerSpawn:{x:2*TW, y:7*TH},
   bgCol:'#181008',
   rows:[
-    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,LC,LC,LC,LC,LC,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
     [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
     [SW,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CF,CF,SW],
     [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
@@ -225,6 +250,18 @@ cafeteria: {
      dir:'down', speed:0, active:true, cooldown:0},
     {x:10*TW, y:3*TH, id:'kane',     col:P.LGRY, w:12, h:14,
      dir:'down', speed:0, active:true, cooldown:0},
+    // Seated student NPCs (M4-T2) — planted at the two outer table
+    // clusters (cols 2-4 and 12-14), well clear of Sterling & Kane's
+    // table (cols 7-9) so the empty tables around the agents read as
+    // deliberate staging, not an accident.
+    {x:2*TW,  y:3*TH, id:'cafe1', col:P.LGRN, w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
+    {x:4*TW,  y:3*TH, id:'cafe2', col:P.AMB,  w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
+    {x:13*TW, y:7*TH, id:'cafe3', col:P.PUR,  w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
+    {x:14*TW, y:7*TH, id:'cafe4', col:P.TEL,  w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
   ],
 },
 
@@ -1000,7 +1037,20 @@ function drawNPCChar(sx, sy, npc, fr) {
 
   // Body/suit colour
   const bodyCol = (id==='indy') ? '#E84898' : (id==='sterling') ? '#2858A0'
-                : (id==='kane')  ? '#505050'  : (npc.patrol) ? '#282828' : '#800000';
+                : (id==='kane')  ? '#505050'  : (npc.patrol) ? '#282828'
+                : (npc.wander || npc.seated) ? npc.col : '#800000';
+
+  // Seated cafeteria students (M4-T2): chair-back rect drawn first, then
+  // torso/arms only — no legs, no walk-cycle offsets.
+  if (npc.seated) {
+    r(2,10, 10,11, '#402C1C');   // chair back
+    drawNPCHead(sx, sy, npc);
+    r(3,13, 8,7, bodyCol);       // torso (short — seated at table height)
+    r(6,13, 2,7, '#00000030');   // seam
+    r(1,14, 2,5, bodyCol);       // arms
+    r(11,14,2,5, bodyCol);
+    return;
+  }
 
   drawNPCHead(sx, sy, npc);
 
@@ -1119,19 +1169,53 @@ function drawMap() {
           px(sx+1+i*8, sy+TH/2, 6, 1, '#2C2018');
           px(sx+5+i*8, sy+4, 2, 2, '#787060');
         }
-      } else if (id === 5) { // window (bedroom)
-        px(sx+1, sy+1, 14, 14, '#3060A0');
-        px(sx+7, sy+1, 2,  14, '#204070');
-        px(sx+1, sy+7, 14, 2,  '#204070');
-        // Stars
-        if (game.frame%60<30) px(sx+3, sy+3, 1, 1, P.WHT);
-        px(sx+11, sy+10, 1, 1, P.WHT);
+      } else if (id === 5) { // window (bedroom) — animated rain (M4-T3)
+        px(sx+1, sy+1, 14, 14, '#1C2C48');
+        px(sx+7, sy+1, 2,  14, '#142338');
+        px(sx+1, sy+7, 14, 2,  '#142338');
+        const rainCols = [2, 4, 11, 13];
+        for (let i = 0; i < rainCols.length; i++) {
+          const ry = sy + 1 + ((game.frame*2 + i*5) % 14);
+          px(sx + rainCols[i], ry, 1, 3, '#78B0E8');
+        }
       } else if (id === 11) { // fence
         px(sx+7, sy, 2, TH, '#555555');
         for (let fy=0;fy<TH;fy+=4) px(sx, sy+fy, TW, 1, '#444444');
-      } else if (id === 19) { // cafeteria table
+      } else if (id === 19) { // cafeteria table — with food trays (M4-T2)
         px(sx+1, sy+3, 14, 10, '#604C30');
         px(sx+1, sy+3, 14, 2,  '#705838');
+        px(sx+2,  sy+6, 5, 4, '#B8B8B8');  // tray
+        px(sx+3,  sy+7, 1, 1, P.RED);      // food blob
+        px(sx+9,  sy+6, 5, 4, '#B8B8B8');  // second tray
+        px(sx+11, sy+7, 1, 1, P.LGRN);
+      } else if (id === 22) { // bedroom wall — PATTERN LOCK poster (M4-T3)
+        px(sx+2, sy+2, 12, 12, '#20182C');  // poster backing
+        px(sx+3, sy+3, 10, 10, '#382848');  // paper
+        px(sx+6, sy+5, 1, 3, P.TEL);        // padlock shackle (left)
+        px(sx+9, sy+5, 1, 3, P.TEL);        // padlock shackle (right)
+        px(sx+6, sy+5, 4, 1, P.TEL);        // padlock shackle (top)
+        px(sx+5, sy+8, 6, 4, P.TEL);        // padlock body
+        px(sx+7, sy+9, 2, 2, '#20182C');    // keyhole
+      } else if (id === 23) { // school hallway door (M4-T1)
+        px(sx+2, sy+1, 12, 14, '#241A10');
+        px(sx+3, sy+2, 10, 12, '#3C2C1C');
+        px(sx+11, sy+8, 2, 2, '#B89050'); // knob
+      } else if (id === 24) { // school bulletin board (M4-T1)
+        px(sx+2, sy+2, 12, 12, '#5C4020');
+        px(sx+3, sy+3, 4, 4, P.WHT);
+        px(sx+9, sy+3, 4, 4, P.AMB);
+        px(sx+3, sy+9, 4, 4, P.LGRN);
+        px(sx+9, sy+9, 4, 4, P.LBLU);
+      } else if (id === 25) { // school trophy case (M4-T1)
+        px(sx+1, sy+1, 14, 14, '#403828');
+        px(sx+2, sy+2, 12, 12, '#8CB8D8');
+        px(sx+6, sy+9, 4, 5, P.AMB);   // trophy cup
+        px(sx+7, sy+6, 2, 4, P.AMB);
+      } else if (id === 26) { // cafeteria lunch-line counter (M4-T2)
+        px(sx, sy+8, TW, 8, '#403020');
+        px(sx, sy+6, TW, 2, '#684C2C');
+        px(sx+2, sy+2, 4, 4, '#B8B8B8'); // steam-tray glint
+        px(sx+10, sy+2, 4, 4, '#B8B8B8');
       } else if (id === 9) { // shipping crate — plank + cross brace
         px(sx+1, sy+1, 14, 14, '#6C4820');
         px(sx+3, sy+3, 10, 10, '#5C3818');
@@ -1185,6 +1269,7 @@ function drawMap() {
   map2.items.forEach(item => {
     if (game.evidenceFound.includes(item.id)) return;
     if (item.id === 'computer') return; // always show computer
+    if (item.flavor) return; // flavor items are found by exploring, not flagged
     const sx = item.tx * TW - cam.x;
     const sy = item.ty * TH - cam.y;
     if (Math.floor(game.frame/15)%2===0) {
@@ -1193,7 +1278,25 @@ function drawMap() {
     }
   });
 
+  if (game.mapId === 'bedroom') drawBedroomDecor();
+
   drawEvidenceEffects();
+}
+
+// Rug + clothes pile floor dressing (M4-T3) — purely cosmetic, drawn on
+// top of open floor tiles so collision/pathing is untouched.
+function drawBedroomDecor() {
+  // Rug — open floor patch below the bed.
+  const rx = 1*TW - cam.x, ry = 5*TH - cam.y;
+  px(rx, ry, 4*TW, 3*TH, '#5C2C38');
+  px(rx+2, ry+2, 4*TW-4, 3*TH-4, '#742838');
+  px(rx+4, ry+4, 4*TW-8, 3*TH-8, '#5C2C38');
+
+  // Clothes pile — open floor corner near the foot of the bed.
+  const cx = 3*TW - cam.x, cy = 3*TH - cam.y;
+  px(cx+2,  cy+8,  8, 5, P.TEL);
+  px(cx+6,  cy+5,  7, 6, '#8C5820');
+  px(cx+1,  cy+10, 5, 4, '#C0C0C0');
 }
 
 // ============================================================
@@ -1311,6 +1414,11 @@ function handleItem(item) {
     return;
   }
 
+  if (item.flavor) { // bedroom flavor items (M4-T3) — don't count as evidence
+    startDialogue([{speaker:'BECK', col:P.TEL, text:item.text}]);
+    return;
+  }
+
   if (item.id.startsWith('evidence_') && !game.evidenceFound.includes(item.id)) {
     const texts = {
       evidence_manifest: [
@@ -1362,10 +1470,23 @@ function handleItem(item) {
 // ============================================================
 // NPC INTERACTIONS
 // ============================================================
+// One-liners for the M4-T1/T2 flavor NPCs — wandering hallway students
+// and seated cafeteria students. Non-plot, ambient dressing only.
+const FLAVOR_LINES = {
+  student1: 'Did you see the news about the dock? Something about a weapons bust.',
+  student2: 'Ms. Patterson gave a pop quiz. On a Friday. Who does that.',
+  student3: "I heard there's a couple of visitors in the front office. Feds, probably.",
+  cafe1:    'Trade you my fries for your cookie.',
+  cafe2:    "Did you see those two suits at Kane's table? Total narcs.",
+  cafe3:    "I'm just saying, cafeteria pizza tastes like cardboard with extra steps.",
+  cafe4:    "Shh, don't stare. I think they're FBI.",
+};
+
 function handleNPC(npc) {
   if (npc.id === 'indy') startIndyDialogue();
   else if (npc.id === 'sterling') startRecruitmentDialogue();
   else if (npc.id === 'kane')     startRecruitmentDialogue();
+  else if (FLAVOR_LINES[npc.id])  startDialogue([{speaker:'', text:FLAVOR_LINES[npc.id]}]);
 }
 
 function startIndyDialogue() {
@@ -1939,6 +2060,44 @@ function checkCafeArrow() {
   if (pl.x + pl.w > arrow.x - 8 && pl.x < arrow.x + 20) {
     transitionToScene('cafeteria');
   }
+}
+
+// ============================================================
+// WANDERING NPCS — random-waypoint students (M4-T1)
+// ============================================================
+// On reaching a target, pause briefly then pick a new random point
+// inside the NPC's wanderBounds. Bounds are kept well inside the open
+// floor so rectSolid() never needs to route them around obstacles.
+function updateWanderers() {
+  const map = MAPS[game.mapId];
+  map.npcs.forEach(n => {
+    if (!n.wander || !n.active) return;
+
+    if (n.wanderPause > 0) { n.wanderPause--; return; }
+
+    if (!n.wanderTarget) {
+      const b = n.wanderBounds;
+      n.wanderTarget = {
+        x: b.x0 + Math.random() * (b.x1 - b.x0),
+        y: b.y0 + Math.random() * (b.y1 - b.y0),
+      };
+    }
+
+    const dx = n.wanderTarget.x - n.x, dy = n.wanderTarget.y - n.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 3) {
+      n.wanderTarget = null;
+      n.wanderPause = 60 + Math.floor(Math.random() * 120); // idle 1-3s
+      return;
+    }
+
+    const nx = n.x + (dx / dist) * n.wanderSpeed;
+    const ny = n.y + (dy / dist) * n.wanderSpeed;
+    const m = 2;
+    if (!rectSolid(nx + m, n.y + m, n.w - m*2, n.h - m*2)) n.x = nx;
+    if (!rectSolid(n.x + m, ny + m, n.w - m*2, n.h - m*2)) n.y = ny;
+    n.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  });
 }
 
 // ============================================================
@@ -2635,6 +2794,7 @@ function loop() {
     case 'EXPLORE':
       updatePlayer();
       updateGuards();
+      updateWanderers();
       updateShadowTeach();
       checkInteract();
       checkCafeArrow();

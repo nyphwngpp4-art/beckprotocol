@@ -11,6 +11,9 @@
 // (OBJECTIVE/EVIDENCE/OPTIONS) and its mute toggle, the
 // objective-ticker banner after the computer puzzle and after
 // the 4th evidence, and a dialogue portrait.
+// Also covers M4: the dressed school hallway (wandering student
+// flavor line) and the cafeteria (lunch counter + seated students),
+// confirming the new dressing tiles don't block the walkway.
 // Fails (exit 1) on any console error or a failed assertion.
 // Screenshots each stage to tools/screens/.
 // ============================================================
@@ -379,6 +382,74 @@ async function main() {
     throw new Error(`Expected school EXPLORE after the dock escape, got ${JSON.stringify(postDockState)}`);
   }
   await shot(page, 'dock-escape-to-school');
+
+  console.log('M4-T1: letting the wandering students move, then capturing the dressed hallway...');
+  await waitFrames(page, 90); // give random-waypoint students time to walk
+  await shot(page, 'school-hallway-dressed');
+
+  console.log('M4-T1: checking a wandering student NPC gives a flavor one-liner...');
+  // Pin student1 well clear of Indy's fixed spot before interacting —
+  // random-waypoint wandering can otherwise drift it into Indy's interact
+  // radius, and checkInteract would resolve to Indy's (much longer)
+  // branching dialogue instead of the flavor one-liner under test.
+  const student1 = await page.evaluate(() => {
+    const s = MAPS['school'].npcs.find(n => n.id === 'student1');
+    s.x = 14 * TW; s.y = 3 * TH; s.wander = false;
+    pl.x = s.x - 4; pl.y = s.y;
+    return { x: s.x, y: s.y };
+  });
+  await waitFrames(page, 2);
+  await page.keyboard.press('KeyZ');
+  await waitFrames(page, 6);
+  const studentDlgActive = await page.evaluate(() => dlg.active);
+  if (!studentDlgActive) throw new Error('Expected a dialogue line from interacting with student1');
+  await shot(page, 'student-flavor-line');
+  for (let i = 0; i < 15; i++) {
+    const active = await page.evaluate(() => dlg.active);
+    if (!active) break;
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
+
+  console.log('M4-T1: walking the full width of the school hallway to the cafeteria arrow...');
+  await page.evaluate(() => { pl.x = 2*TW; pl.y = 5*TH; updateCam(); });
+  await waitFrames(page, 2);
+  // Walk in short bursts and poll for the mapId flip — the fade transition
+  // (~48 frames) can start and finish inside a single long holdDirection
+  // call, so a one-shot waitForFunction(transition.active) can race past it.
+  let reachedCafeteria = false;
+  for (let i = 0; i < 6; i++) {
+    await holdDirection(page, 'ArrowRight', 60);
+    const mapId = await page.evaluate(() => game.mapId);
+    if (mapId === 'cafeteria') { reachedCafeteria = true; break; }
+  }
+  if (!reachedCafeteria) throw new Error('Player did not reach the cafeteria within the movement budget');
+  await page.waitForFunction(() => !transition.active, null, { timeout: 8000 });
+  await waitFrames(page, 3);
+  const cafeState = await page.evaluate(() => ({ state: game.state, mapId: game.mapId }));
+  if (cafeState.mapId !== 'cafeteria' || cafeState.state !== 'EXPLORE') {
+    throw new Error(`Expected cafeteria EXPLORE after crossing the hallway, got ${JSON.stringify(cafeState)}`);
+  }
+  await shot(page, 'cafeteria-dressed');
+
+  console.log('M4-T2: checking a seated cafeteria student gives ambient chatter...');
+  const cafe1 = await page.evaluate(() => {
+    const s = MAPS['cafeteria'].npcs.find(n => n.id === 'cafe1');
+    return { x: s.x, y: s.y };
+  });
+  await page.evaluate(({ x, y }) => { pl.x = x; pl.y = y + TH; }, cafe1);
+  await waitFrames(page, 2);
+  await page.keyboard.press('KeyZ');
+  await waitFrames(page, 6);
+  const cafeDlgActive = await page.evaluate(() => dlg.active);
+  if (!cafeDlgActive) throw new Error('Expected a dialogue line from interacting with cafe1');
+  await shot(page, 'cafe-flavor-line');
+  for (let i = 0; i < 15; i++) {
+    const active = await page.evaluate(() => dlg.active);
+    if (!active) break;
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
 
   console.log('Checking KeyM toggles mute...');
   const mutedBefore = await page.evaluate(() => AU.muted);
