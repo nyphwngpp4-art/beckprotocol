@@ -4,7 +4,9 @@
 // Drives the game with Playwright: title -> intro -> chapter
 // card -> EXPLORE, walks all four directions, opens and solves
 // the bedroom computer puzzle, verifies save/reload/CONTINUE,
-// and captures the bedroom -> dock stepped-fade transition.
+// captures the bedroom -> dock stepped-fade transition, and
+// checks the M1 audio engine (lazy AudioContext creation,
+// per-scene music tracks, pickup sfx, KeyM mute toggle).
 // Fails (exit 1) on any console error or a failed assertion.
 // Screenshots each stage to tools/screens/.
 // ============================================================
@@ -76,6 +78,10 @@ async function main() {
   await waitFrames(page, 10);
   await shot(page, 'intro-slide');
 
+  console.log('Checking AudioContext was created lazily on first keydown...');
+  const audioCreated = await page.evaluate(() => !!AU.ctx);
+  if (!audioCreated) throw new Error('AU.ctx was not created after first keydown');
+
   // Advance through the remaining intro slides into the chapter card.
   for (let i = 0; i < 4; i++) {
     await page.keyboard.press('KeyZ');
@@ -98,6 +104,12 @@ async function main() {
     throw new Error(`Expected game.state === 'EXPLORE', got '${state}'`);
   }
   await shot(page, 'bedroom-explore');
+
+  console.log('Checking bedroom music track is playing...');
+  const bedroomMusic = await page.evaluate(() => AU.musicName);
+  if (bedroomMusic !== 'bedroom') {
+    throw new Error(`Expected AU.musicName === 'bedroom', got '${bedroomMusic}'`);
+  }
 
   console.log('Walking each direction for 30 frames...');
   await holdDirection(page, 'ArrowDown', 30);
@@ -190,6 +202,47 @@ async function main() {
     throw new Error(`Expected dock map after transition, got ${JSON.stringify(dockState)}`);
   }
   await shot(page, 'dock-arrival');
+
+  console.log('Checking dock music track swapped in...');
+  const dockMusic = await page.evaluate(() => AU.musicName);
+  if (dockMusic !== 'dock') {
+    throw new Error(`Expected AU.musicName === 'dock', got '${dockMusic}'`);
+  }
+
+  console.log('Checking evidence pickup plays a sfx...');
+  await page.evaluate(() => {
+    window.__sfxCalls = [];
+    const orig = AU.sfx.bind(AU);
+    AU.sfx = (name) => { window.__sfxCalls.push(name); orig(name); };
+    // Teleport onto the manifest evidence tile (tx:3, ty:3).
+    pl.x = 3 * TW + TW / 2 - pl.w / 2;
+    pl.y = 3 * TH + TH / 2 - pl.h / 2;
+  });
+  await waitFrames(page, 2);
+  await page.keyboard.press('KeyZ');
+  await waitFrames(page, 3);
+  const sfxCalls = await page.evaluate(() => window.__sfxCalls);
+  if (!sfxCalls.includes('pickup')) {
+    throw new Error(`Expected 'pickup' sfx on evidence interact, got ${JSON.stringify(sfxCalls)}`);
+  }
+  // Drain the evidence dialogue so the game returns to EXPLORE.
+  for (let i = 0; i < 20; i++) {
+    const active = await page.evaluate(() => dlg.active);
+    if (!active) break;
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
+
+  console.log('Checking KeyM toggles mute...');
+  const mutedBefore = await page.evaluate(() => AU.muted);
+  await page.keyboard.press('KeyM');
+  await waitFrames(page, 2);
+  const mutedAfter = await page.evaluate(() => ({ muted: AU.muted, gain: AU.masterGain.gain.value }));
+  if (mutedAfter.muted !== !mutedBefore || mutedAfter.gain !== (mutedAfter.muted ? 0 : 1)) {
+    throw new Error(`KeyM did not toggle mute correctly: ${JSON.stringify(mutedAfter)}`);
+  }
+  await page.keyboard.press('KeyM'); // restore
+  await waitFrames(page, 2);
 
   await browser.close();
 
