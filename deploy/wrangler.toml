@@ -1,0 +1,17 @@
+# Cloudflare Workers config — serves the game as a static site at
+# https://beckprotocol.agaviai.com (agaviai.com must be an active zone
+# in the same Cloudflare account; the custom domain attaches and creates
+# its DNS record automatically on deploy).
+#
+# The deploy workflow copies ../beck_hawthorne_8bit.html to
+# public/index.html before running `wrangler deploy` here, so the game
+# file in the repo root stays the single source of truth.
+name = "beckprotocol"
+compatibility_date = "2026-07-01"
+
+routes = [
+  { pattern = "beckprotocol.agaviai.com", custom_domain = true }
+]
+
+[assets]
+directory = "./public"

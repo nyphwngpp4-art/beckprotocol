@@ -1,0 +1,33 @@
+name: Deploy to Cloudflare
+
+# Deploys the game to https://beckprotocol.agaviai.com as a Cloudflare
+# Worker serving static assets. Requires two repository secrets
+# (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN   - "Edit Cloudflare Workers" token template
+#   CLOUDFLARE_ACCOUNT_ID  - from the Cloudflare dashboard sidebar
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/beck-hawthorne-game-l6ai7a]
+    paths:
+      - beck_hawthorne_8bit.html
+      - deploy/**
+      - .github/workflows/deploy.yml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage the game as the site root
+        run: |
+          mkdir -p deploy/public
+          cp beck_hawthorne_8bit.html deploy/public/index.html
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: deploy
