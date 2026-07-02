@@ -293,6 +293,38 @@ function updateCam() {
 }
 
 // ============================================================
+// SAVE SYSTEM
+// ============================================================
+const SAVE_KEY = 'beck_save_v1';
+
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 1,
+      mapId: game.mapId,
+      evidenceFound: game.evidenceFound,
+      choices: game.choices,
+      hearts: pl.hearts,
+    }));
+  } catch (e) { /* localStorage unavailable (e.g. file:// context) */ }
+}
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return (data && data.v === 1 && MAPS[data.mapId]) ? data : null;
+  } catch (e) {
+    return null; // storage disabled or corrupt JSON
+  }
+}
+
+function clearSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+}
+
+// ============================================================
 // DIALOGUE SYSTEM
 // ============================================================
 const dlg = {
@@ -355,7 +387,7 @@ function advanceDialogue() {
   // Choice line — confirm selection
   if (cur && cur.choices) {
     const chosen = cur.choices[dlg.choiceIdx];
-    if (chosen.pick) game.choices[chosen.pick[0]] = chosen.pick[1];
+    if (chosen.pick) { game.choices[chosen.pick[0]] = chosen.pick[1]; saveGame(); }
     if (chosen.jump) { jumpTo(chosen.jump); return; }
   }
 
@@ -1645,6 +1677,35 @@ function drawChapterCard() {
 // ============================================================
 // TITLE SCREEN
 // ============================================================
+const titleMenu = { idx: 0, confirmNewGame: false };
+
+function startNewGame() {
+  restartGame();
+  game.state = 'INTRO';
+}
+
+function updateTitle() {
+  const save = loadSave();
+
+  if (!save) {
+    if (justPressed['KeyZ'] || justPressed['KeyX'] || justPressed['Space']) startNewGame();
+    return;
+  }
+
+  if (titleMenu.confirmNewGame) {
+    if (justPressed['KeyZ']) { clearSave(); startNewGame(); }
+    if (justPressed['KeyX']) titleMenu.confirmNewGame = false;
+    return;
+  }
+
+  if (justPressed['ArrowUp'])   titleMenu.idx = 0;
+  if (justPressed['ArrowDown']) titleMenu.idx = 1;
+  if (justPressed['KeyZ']) {
+    if (titleMenu.idx === 0) continueGame(save);
+    else titleMenu.confirmNewGame = true;
+  }
+}
+
 function drawTitle() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, GW, GH);
@@ -1670,19 +1731,32 @@ function drawTitle() {
   drawText('PROJECT  ARGUS', 52, 116, P.YEL, 6);
   drawText('CHAPTER ONE:  PATTERN', 54, 126, P.GRY, 5);
 
-  if (Math.floor(game.frame/25)%2===0)
-    drawText('PRESS  Z  TO  START', 68, 160, P.WHT, 6);
+  const save = loadSave();
+  let hintY = 185;
 
-  drawText('ARROW KEYS: MOVE     Z: INTERACT', 30, 185, P.DGRY, 5);
-  drawText('X: SKIP     EXPLORE EVERYTHING', 34, 195, P.DGRY, 5);
+  if (!save) {
+    if (Math.floor(game.frame/25)%2===0)
+      drawText('PRESS  Z  TO  START', 68, 160, P.WHT, 6);
+  } else if (titleMenu.confirmNewGame) {
+    drawWrappedText('Start over? Progress will be lost.', 26, 154, GW-52, P.LRED, 6);
+    drawText('[Z] YES     [X] CANCEL', 62, 174, P.YEL, 6);
+    hintY = 195;
+  } else {
+    const opts = ['CONTINUE', 'NEW GAME'];
+    opts.forEach((label, i) => {
+      const sel = i === titleMenu.idx;
+      drawText((sel ? '▶ ' : '  ') + label, 86, 154 + i*14, sel ? P.WHT : P.GRY, 7);
+    });
+    if (Math.floor(game.frame/25)%2===0)
+      drawText('[UP/DOWN] SELECT   [Z] CONFIRM', 44, 182, P.DGRY, 5);
+    hintY = 195;
+  }
+
+  drawText('ARROW KEYS: MOVE     Z: INTERACT', 30, hintY, P.DGRY, 5);
+  drawText('X: SKIP     EXPLORE EVERYTHING', 34, hintY+10, P.DGRY, 5);
 
   // NES copyright style
   drawText('© BECK HAWTHORNE: ORIGIN  2024', 30, 225, '#303030', 5);
-
-  if (justPressed['KeyZ'] || justPressed['KeyX'] || justPressed['Space']) {
-    intro.slide = 0; intro.timer = 0;
-    game.state = 'INTRO';
-  }
 }
 
 // ============================================================
@@ -1746,7 +1820,7 @@ function drawEnding() {
 // ============================================================
 // SCENE LOADING
 // ============================================================
-function loadScene(mapId) {
+function loadScene(mapId, heal = true) {
   game.mapId          = mapId;
   game.dockChaseActive = false;
   game.state          = 'EXPLORE';
@@ -1755,9 +1829,19 @@ function loadScene(mapId) {
   const map = MAPS[mapId];
   pl.x     = map.playerSpawn.x;
   pl.y     = map.playerSpawn.y;
-  pl.hearts = Math.min(pl.maxHearts, pl.hearts + 1); // restore 1 heart on scene change
+  if (heal) pl.hearts = Math.min(pl.maxHearts, pl.hearts + 1); // restore 1 heart on scene change
   pl.invincible = 60;
   updateCam();
+  saveGame();
+}
+
+function continueGame(save) {
+  game.evidenceFound = Array.isArray(save.evidenceFound) ? save.evidenceFound.slice() : [];
+  game.choices        = (save.choices && typeof save.choices === 'object') ? save.choices : {};
+  pl.hearts = (typeof save.hearts === 'number')
+    ? Math.max(0, Math.min(pl.maxHearts, save.hearts))
+    : pl.maxHearts;
+  loadScene(save.mapId, false);
 }
 
 function restartGame() {
@@ -1767,6 +1851,7 @@ function restartGame() {
   });
   intro.slide = 0; intro.timer = 0;
   Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
+  Object.assign(titleMenu, {idx:0, confirmNewGame:false});
   // Reset dock npcs
   MAPS['dock'].npcs.forEach(n => { n.active=false; n.x=15*TW; n.y=5*TH; });
   game.frame = 0;
@@ -1781,6 +1866,7 @@ function loop() {
   // --- UPDATE ---
   switch (game.state) {
     case 'TITLE':
+      updateTitle();
       break;
     case 'INTRO':
       updateIntro();

@@ -117,6 +117,26 @@ async function main() {
   }
   await shot(page, 'puzzle');
 
+  console.log('Testing save/continue: reloading page...');
+  // The last saveGame() call happened when the chapter card transitioned
+  // into the bedroom scene, so the save on disk should still point there.
+  await page.reload();
+  await waitFrames(page, 10);
+  const reloadedState = await page.evaluate(() => game.state);
+  if (reloadedState !== 'TITLE') {
+    throw new Error(`Expected TITLE after reload, got '${reloadedState}'`);
+  }
+  await shot(page, 'title-with-save');
+
+  // CONTINUE is the default (idx 0) selection when a save exists.
+  await page.keyboard.press('KeyZ');
+  await waitFrames(page, 10);
+  const continuedState = await page.evaluate(() => ({ state: game.state, mapId: game.mapId }));
+  if (continuedState.state !== 'EXPLORE' || continuedState.mapId !== 'bedroom') {
+    throw new Error(`CONTINUE did not restore bedroom EXPLORE state: ${JSON.stringify(continuedState)}`);
+  }
+  await shot(page, 'continue-bedroom');
+
   await browser.close();
 
   if (errors.length) {
