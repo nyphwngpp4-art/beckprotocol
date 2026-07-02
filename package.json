@@ -1,0 +1,10 @@
+{
+  "name": "beck-hawthorne-origin",
+  "private": true,
+  "scripts": {
+    "smoke": "node tools/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

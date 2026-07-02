@@ -119,7 +119,6 @@ bedroom: {
     {tx:9, ty:6, id:'computer', label:'[Z] Pattern Lock'},
   ],
   npcs:[],
-  nextScene:'',
 },
 
 dock: {
@@ -152,9 +151,8 @@ dock: {
   ],
   npcs:[
     {x:15*TW, y:12*TH, id:'smuggler', col:P.RED, w:14, h:14,
-     dir:'down', speed:0.85, active:false, isCopy:false, cooldown:0},
+     dir:'down', speed:0.85, active:false, cooldown:0},
   ],
-  nextScene:'school',
 },
 
 school: {
@@ -178,12 +176,11 @@ school: {
   items:[],
   npcs:[
     {x:6*TW, y:5*TH, id:'indy', col:P.PNK, w:12, h:14, dir:'right',
-     speed:0, active:true, isCopy:false, cooldown:0},
+     speed:0, active:true, cooldown:0},
     // arrow marker
     {x:18*TW, y:5*TH, id:'cafe_arrow', col:P.YEL, w:12, h:12,
-     dir:'right', speed:0, active:true, isCopy:false, cooldown:0},
+     dir:'right', speed:0, active:true, cooldown:0},
   ],
-  nextScene:'cafeteria',
 },
 
 cafeteria: {
@@ -210,14 +207,195 @@ cafeteria: {
   items:[],
   npcs:[
     {x:8*TW,  y:3*TH, id:'sterling', col:P.LBLU, w:12, h:14,
-     dir:'down', speed:0, active:true, isCopy:false, cooldown:0},
+     dir:'down', speed:0, active:true, cooldown:0},
     {x:10*TW, y:3*TH, id:'kane',     col:P.LGRY, w:12, h:14,
-     dir:'down', speed:0, active:true, isCopy:false, cooldown:0},
+     dir:'down', speed:0, active:true, cooldown:0},
   ],
-  nextScene:'ending',
 },
 
 };
+
+// ============================================================
+// AUDIO ENGINE — chiptune synth, WebAudio only, no audio files
+// ============================================================
+// One AudioContext, created lazily on first keydown (autoplay policy).
+// sfx() = short envelope'd square/triangle/noise blips.
+// music() = 2-channel sequencer (pulse lead + triangle bass) that
+// schedules notes ahead of ctx.currentTime every frame (lookahead
+// scheduling) so loops never gap or click. No setInterval.
+const AU = {
+  ctx: null,
+  muted: false,
+  masterGain: null,
+  musicGain: null,
+  sfxGain: null,
+  musicName: null,
+  leadState: { idx: 0, nextTime: null },
+  bassState: { idx: 0, nextTime: null },
+
+  ensure() {
+    if (this.ctx) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    this.ctx = new Ctx();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = this.muted ? 0 : 1;
+    this.masterGain.connect(this.ctx.destination);
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.gain.value = 0.35;
+    this.musicGain.connect(this.masterGain);
+    this.sfxGain = this.ctx.createGain();
+    this.sfxGain.gain.value = 0.5;
+    this.sfxGain.connect(this.masterGain);
+  },
+
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.masterGain) this.masterGain.gain.value = this.muted ? 0 : 1;
+    saveGame();
+  },
+
+  // Single envelope'd note. type: 'square' | 'triangle' | 'noise'.
+  tone(freq, type, dur, peak, when, dest) {
+    if (!this.ctx) return;
+    const t0 = when != null ? when : this.ctx.currentTime;
+    let src;
+    if (type === 'noise') {
+      const n = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) data[i] = Math.random() * 2 - 1;
+      src = this.ctx.createBufferSource();
+      src.buffer = buf;
+    } else {
+      src = this.ctx.createOscillator();
+      src.type = type;
+      src.frequency.setValueAtTime(freq, t0);
+    }
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(peak, t0 + 0.008);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(g);
+    g.connect(dest || this.sfxGain);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+  },
+
+  sfx(name) {
+    this.ensure();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    switch (name) {
+      case 'text':    this.tone(1200, 'square',  0.03, 0.15, t); break;
+      case 'confirm': this.tone(660,  'square',  0.05, 0.25, t);
+                       this.tone(880,  'square',  0.08, 0.25, t + 0.05); break;
+      case 'cancel':  this.tone(440,  'square',  0.05, 0.2,  t);
+                       this.tone(330,  'square',  0.08, 0.2,  t + 0.05); break;
+      case 'pickup':  this.tone(523,  'square',  0.06, 0.25, t);
+                       this.tone(784,  'square',  0.08, 0.25, t + 0.06);
+                       this.tone(1047, 'square',  0.12, 0.25, t + 0.12); break;
+      case 'hurt':    this.tone(160,  'noise',   0.15, 0.3,  t);
+                       this.tone(110,  'square',  0.15, 0.2,  t); break;
+      case 'alert':   this.tone(880,  'square',  0.09, 0.3,  t);
+                       this.tone(880,  'square',  0.09, 0.3,  t + 0.15);
+                       this.tone(880,  'square',  0.09, 0.3,  t + 0.3); break;
+      case 'success': this.tone(523,  'triangle', 0.1, 0.3,  t);
+                       this.tone(659,  'triangle', 0.1, 0.3,  t + 0.1);
+                       this.tone(784,  'triangle', 0.1, 0.3,  t + 0.2);
+                       this.tone(1047, 'triangle', 0.2, 0.3,  t + 0.3); break;
+      case 'door':    this.tone(220,  'square',  0.08, 0.2,  t);
+                       this.tone(150,  'square',  0.12, 0.2,  t + 0.08); break;
+      case 'heart':   this.tone(784,  'triangle', 0.1, 0.25, t);
+                       this.tone(1047, 'triangle', 0.14, 0.25, t + 0.08); break;
+    }
+  },
+
+  music(name) {
+    if (this.musicName === name) return;
+    this.musicName  = name;
+    this.leadState  = { idx: 0, nextTime: null };
+    this.bassState  = { idx: 0, nextTime: null };
+  },
+
+  stopMusic() {
+    this.musicName = null;
+  },
+
+  // Called every frame from loop(). Schedules notes on each channel
+  // whenever they fall within a short lookahead window of ctx.currentTime.
+  updateMusic() {
+    if (!this.ctx || !this.musicName) return;
+    const score = MUSIC[this.musicName];
+    if (!score) return;
+    const spu = 60 / score.bpm / 4; // seconds per sixteenth unit
+    if (this.leadState.nextTime === null) this.leadState.nextTime = this.ctx.currentTime + 0.05;
+    if (this.bassState.nextTime === null) this.bassState.nextTime = this.ctx.currentTime + 0.05;
+    this.stepChannel(score.lead, this.leadState, 'square',   spu, 0.16);
+    this.stepChannel(score.bass, this.bassState, 'triangle', spu, 0.22);
+  },
+
+  stepChannel(table, state, type, spu, peak) {
+    const LOOKAHEAD = 0.15;
+    while (state.nextTime < this.ctx.currentTime + LOOKAHEAD) {
+      const [note, len] = table[state.idx % table.length];
+      const dur = len * spu;
+      if (note > 0) {
+        const freq = 440 * Math.pow(2, (note - 69) / 12);
+        this.tone(freq, type, dur * 0.9, peak, state.nextTime, this.musicGain);
+      }
+      state.nextTime += dur;
+      state.idx++;
+    }
+  },
+};
+
+// Note tables: [midiNote, sixteenths]. note 0 = rest. Each track's lead
+// and bass sixteenth-counts sum to the same total so the two channels
+// stay in phase across loop boundaries.
+const MUSIC = {
+  // Slow, mysterious minor key.
+  title: {
+    bpm: 72,
+    lead: [[57,8],[60,4],[64,4],[62,8],[60,4],[59,4],[57,16],[0,8],[55,8],[57,8],[60,8],[57,16]],
+    bass: [[45,16],[41,16],[43,16],[45,16],[40,16],[45,16]],
+  },
+  // Quiet, curious.
+  bedroom: {
+    bpm: 96,
+    lead: [[72,4],[76,4],[79,4],[76,4],[74,4],[72,4],[71,4],[69,4],[71,8],[72,8],[0,8],[69,8]],
+    bass: [[48,16],[53,16],[45,16],[48,16]],
+  },
+  // Tense, sparse bass.
+  dock: {
+    bpm: 110,
+    lead: [[62,8],[0,8],[65,4],[62,4],[0,16],[61,8],[0,8],[62,16]],
+    bass: [[38,24],[36,24],[38,24]],
+  },
+  // Fast variant of dock — same key, +40 BPM.
+  chase: {
+    bpm: 150,
+    lead: [[62,4],[65,4],[62,4],[61,4],[62,4],[65,4],[67,4],[65,4],[62,8],[0,4],[61,4],[62,8],[0,8]],
+    bass: [[38,8],[38,8],[36,8],[38,8],[33,8],[38,8],[35,8],[38,8]],
+  },
+  // Light, daytime.
+  school: {
+    bpm: 108,
+    lead: [[72,4],[74,4],[76,4],[79,4],[76,4],[74,4],[72,8],[71,4],[72,4],[74,8],[0,8]],
+    bass: [[48,8],[52,8],[53,8],[55,8],[48,8],[52,8],[45,8]],
+  },
+  // Resolved, hopeful.
+  ending: {
+    bpm: 84,
+    lead: [[72,8],[76,8],[79,8],[84,8],[79,8],[76,8],[74,8],[72,16]],
+    bass: [[48,24],[53,24],[48,24]],
+  },
+};
+
+// mapId -> music track. Cafeteria has no dedicated track in the plan
+// (M1-T2 lists title/bedroom/dock/chase/school/ending only); it reuses
+// the school theme since it's the same building.
+const MUSIC_FOR_MAP = { bedroom:'bedroom', dock:'dock', school:'school', cafeteria:'school' };
 
 // ============================================================
 // INPUT
@@ -225,6 +403,7 @@ cafeteria: {
 const keys = {};
 const justPressed = {};
 document.addEventListener('keydown', e => {
+  AU.ensure();
   if (!keys[e.code]) justPressed[e.code] = true;
   keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))
@@ -297,6 +476,94 @@ function updateCam() {
 }
 
 // ============================================================
+// SAVE SYSTEM
+// ============================================================
+const SAVE_KEY = 'beck_save_v1';
+
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 1,
+      mapId: game.mapId,
+      evidenceFound: game.evidenceFound,
+      choices: game.choices,
+      hearts: pl.hearts,
+      muted: AU.muted,
+    }));
+  } catch (e) { /* localStorage unavailable (e.g. file:// context) */ }
+}
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return (data && data.v === 1 && MAPS[data.mapId]) ? data : null;
+  } catch (e) {
+    return null; // storage disabled or corrupt JSON
+  }
+}
+
+function clearSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+}
+
+// ============================================================
+// SCENE TRANSITIONS
+// ============================================================
+// Full-screen black fade: 24 frames out, run midFn, 24 frames in.
+// Stepped alpha only (8 discrete levels) — no smooth fades on NES.
+const TRANS_OUT_FRAMES = 24, TRANS_IN_FRAMES = 24, TRANS_STEPS = 8;
+
+const transition = {
+  active: false,
+  kind: null,
+  frame: 0,
+  midFn: null,
+  midCalled: false,
+
+  start(kind, midFn) {
+    this.active    = true;
+    this.kind      = kind;
+    this.frame     = 0;
+    this.midFn     = midFn;
+    this.midCalled = false;
+  },
+
+  update() {
+    if (!this.active) return;
+    this.frame++;
+    if (!this.midCalled && this.frame >= TRANS_OUT_FRAMES) {
+      this.midCalled = true;
+      if (this.midFn) this.midFn();
+    }
+    if (this.frame >= TRANS_OUT_FRAMES + TRANS_IN_FRAMES) this.active = false;
+  },
+
+  // 0 (clear) .. 1 (fully black), quantized to TRANS_STEPS discrete levels.
+  alpha() {
+    if (!this.active) return 0;
+    const t = this.frame <= TRANS_OUT_FRAMES
+      ? this.frame / TRANS_OUT_FRAMES
+      : Math.max(0, 1 - (this.frame - TRANS_OUT_FRAMES) / TRANS_IN_FRAMES);
+    return Math.ceil(t * TRANS_STEPS) / TRANS_STEPS;
+  },
+
+  draw() {
+    if (!this.active) return;
+    const a = this.alpha();
+    if (a <= 0) return;
+    ctx.fillStyle = `rgba(0,0,0,${a})`;
+    ctx.fillRect(0, 0, GW, GH);
+  },
+};
+
+function transitionToScene(mapId, heal) {
+  AU.sfx('door');
+  transition.start('fade', () => loadScene(mapId, heal));
+}
+
+// ============================================================
 // DIALOGUE SYSTEM
 // ============================================================
 const dlg = {
@@ -359,7 +626,7 @@ function advanceDialogue() {
   // Choice line — confirm selection
   if (cur && cur.choices) {
     const chosen = cur.choices[dlg.choiceIdx];
-    if (chosen.pick) game.choices[chosen.pick[0]] = chosen.pick[1];
+    if (chosen.pick) { game.choices[chosen.pick[0]] = chosen.pick[1]; saveGame(); }
     if (chosen.jump) { jumpTo(chosen.jump); return; }
   }
 
@@ -924,6 +1191,7 @@ function handleItem(item) {
     };
 
     game.evidenceFound.push(item.id);
+    AU.sfx('pickup');
 
     const lines = texts[item.id] || [{text:'You found something.'}];
     const allFound = ['evidence_manifest','evidence_crates','evidence_photos','evidence_plates']
@@ -969,7 +1237,7 @@ function startIndyDialogue() {
       {text:'"You know the East Dock raid on the news?"',
        pick:['indy','full'],
        jump:'indy_full'},
-    ], choiceIdx:0},
+    ]},
     {label:'indy_deflect',
      speaker:'BECK', col:P.TEL, text:"I'm just tired."},
     {speaker:'INDY', col:P.PNK, text:"You're the worst liar I've ever met and I've known you seven years."},
@@ -1058,7 +1326,7 @@ function startRecruitmentDialogue() {
      speaker:'BECK', col:P.TEL, text:"I'll think about it."},{jump:'go_ending'},
     {label:'go_ending',
      speaker:'STERLING', col:P.LBLU, text:"Good luck, Hawthorne."},
-  ], () => { game.state = 'ENDING'; });
+  ], () => { game.state = 'ENDING'; AU.music('ending'); });
 }
 
 // ============================================================
@@ -1071,6 +1339,7 @@ function triggerDockChase() {
   smuggler.x       = 15 * TW;
   smuggler.y       = 5  * TH;
   game.state       = 'DOCK_CHASE';
+  AU.music('chase');
 }
 
 function updateDockChase() {
@@ -1106,6 +1375,7 @@ function updateDockChase() {
     pl.invincible = 80;
     smug.cooldown = 60;
     showDamageFlash();
+    AU.sfx('hurt');
     if (pl.hearts <= 0) {
       startDialogue([
         {speaker:'', text:'CAUGHT! The smuggler grabbed you.'},
@@ -1132,6 +1402,7 @@ function updateDockChase() {
   if (pl.x + pl.w > exitX && pl.x < exitX + TW && pl.y < exitY + TH*2) {
     game.dockChaseActive  = false;
     smug.active           = false;
+    AU.sfx('success');
     startDialogue([
       {speaker:'', text:'You hit the street at full speed.'},
       {speaker:'BECK', col:P.TEL, text:'All 43 photos intact.'},
@@ -1139,7 +1410,7 @@ function updateDockChase() {
       {speaker:'', text:'Four days later: FEDERAL RAID ON EAST DOCK — $4.2M IN WEAPONS SEIZED.'},
       {speaker:'', text:'Nobody knows it was you.'},
       {speaker:'', text:'Two weeks pass. Then something strange happens at school...'},
-    ], () => loadScene('school'));
+    ], () => transitionToScene('school'));
     return;
   }
 
@@ -1192,6 +1463,11 @@ function drawHUD() {
   if (game.state === 'EXPLORE') drawInteractPrompt();
 }
 
+// Tiny mute indicator, bottom-right corner, shown in every state.
+function drawMuteGlyph() {
+  drawText(AU.muted ? '♪̶' : '♪', GW-11, GH-4, AU.muted ? P.DGRY : P.TEL, 7);
+}
+
 function drawInteractPrompt() {
   const cx  = pl.x + pl.w/2;
   const cy  = pl.y + pl.h/2;
@@ -1233,7 +1509,7 @@ function checkCafeArrow() {
   const arrow = MAPS['school'].npcs.find(n => n.id === 'cafe_arrow');
   if (!arrow) return;
   if (pl.x + pl.w > arrow.x - 8 && pl.x < arrow.x + 20) {
-    loadScene('cafeteria');
+    transitionToScene('cafeteria');
   }
 }
 
@@ -1243,7 +1519,6 @@ function checkCafeArrow() {
 const puzzle = {
   active: false,
   phase: 0,    // 0=puzzle1, 1=puzzle2, 2=anomaly, 3=done
-  round: 0,
   selected: 0,
   cluesFound: 0,
   cluesSel: 0, // which anomaly clue is cursor on
@@ -1309,8 +1584,10 @@ function updatePuzzle() {
         puzzle.answered      = true;
         puzzle.answerCorrect = (puzzle.selected === PZ_DATA[puzzle.phase].correct);
         puzzle.flashTimer    = 80;
+        AU.sfx(puzzle.answerCorrect ? 'confirm' : 'cancel');
       } else {
         // Advance phase
+        AU.sfx('confirm');
         puzzle.phase++;
         puzzle.answered   = false;
         puzzle.selected   = 0;
@@ -1323,6 +1600,7 @@ function updatePuzzle() {
         const idx = puzzle.cluesSel;
         if (idx < ANOMALY_CLUES.length) {
           puzzle.cluesFound = Math.max(puzzle.cluesFound, idx + 1);
+          AU.sfx(puzzle.cluesFound >= ANOMALY_CLUES.length ? 'success' : 'confirm');
           if (puzzle.cluesFound >= ANOMALY_CLUES.length) {
             puzzle.flashTimer = 100;
           }
@@ -1350,7 +1628,7 @@ function updatePuzzle() {
            speaker:'', text:"Beck puts on dark clothes. Leaves a note: 'Went for a ride. Back by midnight.'"},
           {speaker:'', text:'The East Dock is 20 minutes by bike. It is 10:22 PM.'},
           {speaker:'', text:'She goes alone.'},
-        ], () => loadScene('dock'));
+        ], () => transitionToScene('dock'));
       }
     }
   }
@@ -1547,7 +1825,7 @@ function updateIntro() {
 function updateChapterCard() {
   intro.timer++;
   if (justPressed['KeyZ'] || intro.timer > 200) {
-    loadScene('bedroom');
+    transitionToScene('bedroom');
   }
 }
 
@@ -1650,6 +1928,36 @@ function drawChapterCard() {
 // ============================================================
 // TITLE SCREEN
 // ============================================================
+const titleMenu = { idx: 0, confirmNewGame: false };
+
+function startNewGame() {
+  restartGame();
+  game.state = 'INTRO';
+}
+
+function updateTitle() {
+  const save = loadSave();
+
+  if (!save) {
+    if (justPressed['KeyZ'] || justPressed['KeyX'] || justPressed['Space']) { AU.sfx('confirm'); startNewGame(); }
+    return;
+  }
+
+  if (titleMenu.confirmNewGame) {
+    if (justPressed['KeyZ']) { AU.sfx('confirm'); clearSave(); startNewGame(); }
+    if (justPressed['KeyX']) { AU.sfx('cancel'); titleMenu.confirmNewGame = false; }
+    return;
+  }
+
+  if (justPressed['ArrowUp'])   titleMenu.idx = 0;
+  if (justPressed['ArrowDown']) titleMenu.idx = 1;
+  if (justPressed['KeyZ']) {
+    AU.sfx('confirm');
+    if (titleMenu.idx === 0) continueGame(save);
+    else titleMenu.confirmNewGame = true;
+  }
+}
+
 function drawTitle() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, GW, GH);
@@ -1675,19 +1983,32 @@ function drawTitle() {
   drawText('PROJECT  ARGUS', 52, 116, P.YEL, 6);
   drawText('CHAPTER ONE:  PATTERN', 54, 126, P.GRY, 5);
 
-  if (Math.floor(game.frame/25)%2===0)
-    drawText('PRESS  Z  TO  START', 68, 160, P.WHT, 6);
+  const save = loadSave();
+  let hintY = 185;
 
-  drawText('ARROW KEYS: MOVE     Z: INTERACT', 30, 185, P.DGRY, 5);
-  drawText('X: SKIP     EXPLORE EVERYTHING', 34, 195, P.DGRY, 5);
+  if (!save) {
+    if (Math.floor(game.frame/25)%2===0)
+      drawText('PRESS  Z  TO  START', 68, 160, P.WHT, 6);
+  } else if (titleMenu.confirmNewGame) {
+    drawWrappedText('Start over? Progress will be lost.', 26, 154, GW-52, P.LRED, 6);
+    drawText('[Z] YES     [X] CANCEL', 62, 174, P.YEL, 6);
+    hintY = 195;
+  } else {
+    const opts = ['CONTINUE', 'NEW GAME'];
+    opts.forEach((label, i) => {
+      const sel = i === titleMenu.idx;
+      drawText((sel ? '▶ ' : '  ') + label, 86, 154 + i*14, sel ? P.WHT : P.GRY, 7);
+    });
+    if (Math.floor(game.frame/25)%2===0)
+      drawText('[UP/DOWN] SELECT   [Z] CONFIRM', 44, 182, P.DGRY, 5);
+    hintY = 195;
+  }
+
+  drawText('ARROW KEYS: MOVE     Z: INTERACT', 30, hintY, P.DGRY, 5);
+  drawText('X: SKIP     EXPLORE EVERYTHING', 34, hintY+10, P.DGRY, 5);
 
   // NES copyright style
   drawText('© BECK HAWTHORNE: ORIGIN  2024', 30, 225, '#303030', 5);
-
-  if (justPressed['KeyZ'] || justPressed['KeyX'] || justPressed['Space']) {
-    intro.slide = 0; intro.timer = 0;
-    game.state = 'INTRO';
-  }
 }
 
 // ============================================================
@@ -1751,7 +2072,7 @@ function drawEnding() {
 // ============================================================
 // SCENE LOADING
 // ============================================================
-function loadScene(mapId) {
+function loadScene(mapId, heal = true) {
   game.mapId          = mapId;
   game.dockChaseActive = false;
   game.state          = 'EXPLORE';
@@ -1760,9 +2081,21 @@ function loadScene(mapId) {
   const map = MAPS[mapId];
   pl.x     = map.playerSpawn.x;
   pl.y     = map.playerSpawn.y;
-  pl.hearts = Math.min(pl.maxHearts, pl.hearts + 1); // restore 1 heart on scene change
+  if (heal && pl.hearts < pl.maxHearts) AU.sfx('heart');
+  if (heal) pl.hearts = Math.min(pl.maxHearts, pl.hearts + 1); // restore 1 heart on scene change
   pl.invincible = 60;
   updateCam();
+  saveGame();
+  AU.music(MUSIC_FOR_MAP[mapId] || mapId);
+}
+
+function continueGame(save) {
+  game.evidenceFound = Array.isArray(save.evidenceFound) ? save.evidenceFound.slice() : [];
+  game.choices        = (save.choices && typeof save.choices === 'object') ? save.choices : {};
+  pl.hearts = (typeof save.hearts === 'number')
+    ? Math.max(0, Math.min(pl.maxHearts, save.hearts))
+    : pl.maxHearts;
+  loadScene(save.mapId, false);
 }
 
 function restartGame() {
@@ -1772,23 +2105,27 @@ function restartGame() {
   });
   intro.slide = 0; intro.timer = 0;
   Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
+  Object.assign(titleMenu, {idx:0, confirmNewGame:false});
   // Reset dock npcs
   MAPS['dock'].npcs.forEach(n => { n.active=false; n.x=15*TW; n.y=5*TH; });
   game.frame = 0;
+  AU.music('title');
 }
-
-// puzzle box inner height constant
-const hh = GH - 20;
 
 // ============================================================
 // MAIN GAME LOOP
 // ============================================================
 function loop() {
   game.frame++;
+  transition.update();
+  AU.updateMusic();
+  if (justPressed['KeyM']) AU.toggleMute();
 
   // --- UPDATE ---
-  switch (game.state) {
+  // Input is ignored entirely while a transition is playing.
+  if (!transition.active) switch (game.state) {
     case 'TITLE':
+      updateTitle();
       break;
     case 'INTRO':
       updateIntro();
@@ -1850,6 +2187,9 @@ function loop() {
     drawHUD();
   }
 
+  drawMuteGlyph();
+  transition.draw();
+
   // Clear justPressed AFTER drawing so title/ending screens can read it
   for (const k in justPressed) delete justPressed[k];
 
@@ -1859,6 +2199,8 @@ function loop() {
 // ============================================================
 // INIT
 // ============================================================
+const _initSave = loadSave();
+if (_initSave && typeof _initSave.muted === 'boolean') AU.muted = _initSave.muted;
 restartGame();
 game.state = 'TITLE';
 requestAnimationFrame(loop);
