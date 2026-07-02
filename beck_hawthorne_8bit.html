@@ -513,7 +513,18 @@ const game = {
   objective: '',
   objectiveBannerTimer: 0,
   shadowTaught: false, // M3-T3: has the "Shadows hide you." toast fired yet?
+  textSpeed: 'NORMAL', // M6-T2: NORMAL / FAST / INSTANT — pause OPTIONS tab
 };
+
+// M6-T2: frames-per-character for each text-speed setting (INSTANT skips
+// the typewriter entirely — see updateDialogue).
+const TEXT_SPEED_FRAMES = { NORMAL: 2, FAST: 1, INSTANT: 0 };
+const TEXT_SPEED_ORDER  = ['NORMAL', 'FAST', 'INSTANT'];
+function cycleTextSpeed() {
+  const i = TEXT_SPEED_ORDER.indexOf(game.textSpeed);
+  game.textSpeed = TEXT_SPEED_ORDER[(i + 1) % TEXT_SPEED_ORDER.length];
+  saveGame();
+}
 
 // Player
 const pl = {
@@ -551,6 +562,7 @@ function saveGame() {
       choices: game.choices,
       hearts: pl.hearts,
       muted: AU.muted,
+      textSpeed: game.textSpeed,
     }));
   } catch (e) { /* localStorage unavailable (e.g. file:// context) */ }
 }
@@ -793,11 +805,18 @@ function updateDialogue() {
 
   dlg.choices = null;
   if (dlg.charIdx < (cur.text || '').length) {
-    dlg.charTimer++;
-    if (dlg.charTimer >= 2) {
-      dlg.charTimer = 0;
-      dlg.charIdx++;
-      if (dlg.charIdx % 2 === 0) AU.sfx('text');
+    const framesPerChar = TEXT_SPEED_FRAMES[game.textSpeed] ?? 2;
+    if (framesPerChar === 0) {
+      // INSTANT: reveal the whole line at once, no typewriter.
+      dlg.charIdx = (cur.text || '').length;
+      AU.sfx('text');
+    } else {
+      dlg.charTimer++;
+      if (dlg.charTimer >= framesPerChar) {
+        dlg.charTimer = 0;
+        dlg.charIdx++;
+        if (dlg.charIdx % 2 === 0) AU.sfx('text');
+      }
     }
   }
   if (justPressed['KeyZ'] || justPressed['KeyX']) advanceDialogue();
@@ -1125,6 +1144,10 @@ function drawNPC(npc) {
 // ============================================================
 // MAP RENDERING
 // ============================================================
+// M6-T3: hoisted out of the per-tile hot loop below (was a fresh array
+// literal per window tile per frame).
+const WINDOW_RAIN_COLS = [2, 4, 11, 13];
+
 function drawMap() {
   const map  = MAPS[game.mapId];
   const rows = map.rows;
@@ -1177,10 +1200,9 @@ function drawMap() {
         px(sx+1, sy+1, 14, 14, '#1C2C48');
         px(sx+7, sy+1, 2,  14, '#142338');
         px(sx+1, sy+7, 14, 2,  '#142338');
-        const rainCols = [2, 4, 11, 13];
-        for (let i = 0; i < rainCols.length; i++) {
+        for (let i = 0; i < WINDOW_RAIN_COLS.length; i++) {
           const ry = sy + 1 + ((game.frame*2 + i*5) % 14);
-          px(sx + rainCols[i], ry, 1, 3, '#78B0E8');
+          px(sx + WINDOW_RAIN_COLS[i], ry, 1, 3, '#78B0E8');
         }
       } else if (id === 11) { // fence
         px(sx+7, sy, 2, TH, '#555555');
@@ -1277,6 +1299,14 @@ function drawMap() {
     const sx = item.tx * TW - cam.x;
     const sy = item.ty * TH - cam.y;
     if (Math.floor(game.frame/15)%2===0) {
+      // M6-T2: colorblind check — a pulsing corner outline gives the
+      // marker a shape signal independent of the amber fill, so it still
+      // reads without relying on color alone.
+      const pr = (Math.floor(game.frame/8) % 2) ? 3 : 1;
+      px(sx+4-pr,  sy-6-pr, 1, 1, P.WHT);
+      px(sx+11+pr, sy-6-pr, 1, 1, P.WHT);
+      px(sx+4-pr,  sy-1+pr, 1, 1, P.WHT);
+      px(sx+11+pr, sy-1+pr, 1, 1, P.WHT);
       px(sx+4, sy-6, 8, 6, P.AMB);
       drawText('!', sx+6, sy-2, P.BLK, 5);
     }
@@ -1448,6 +1478,7 @@ function handleItem(item) {
     };
 
     game.evidenceFound.push(item.id);
+    saveGame(); // M6-T1: evidence progress is real player progress — checkpoint it
     AU.sfx('pickup');
     spawnEvidenceEffect(item.tx, item.ty);
 
@@ -1636,9 +1667,10 @@ function updatePause() {
     return;
   }
   if (justPressed['ArrowUp'])   pause.optIdx = Math.max(0, pause.optIdx - 1);
-  if (justPressed['ArrowDown']) pause.optIdx = Math.min(1, pause.optIdx + 1);
+  if (justPressed['ArrowDown']) pause.optIdx = Math.min(2, pause.optIdx + 1);
   if (justPressed['KeyZ']) {
     if (pause.optIdx === 0) AU.toggleMute();
+    else if (pause.optIdx === 1) { cycleTextSpeed(); AU.sfx('confirm'); }
     else { pause.confirmRestart = true; AU.sfx('cancel'); }
   }
 }
@@ -1680,15 +1712,15 @@ function drawPause() {
         cx+22, y, bw-56, found ? P.WHT : '#505050', 6);
     });
   } else {
-    const opts = ['MUTE: ' + (AU.muted ? 'ON' : 'OFF'), 'RESTART CHAPTER'];
+    const opts = ['MUTE: ' + (AU.muted ? 'ON' : 'OFF'), 'TEXT SPEED: ' + game.textSpeed, 'RESTART CHAPTER'];
     opts.forEach((label, i) => {
       const sel = i === pause.optIdx;
       const y = cy0 + 16 + i * 16;
       drawText((sel ? '▶ ' : '  ') + label, cx, y, sel ? P.YEL : P.LGRY, 7);
     });
     if (pause.confirmRestart) {
-      drawWrappedText('Restart the chapter? Progress will be lost.', cx, cy0+52, bw-30, P.LRED, 6);
-      drawText('[Z] YES   [X] CANCEL', cx, cy0+66, P.YEL, 6);
+      drawWrappedText('Restart the chapter? Progress will be lost.', cx, cy0+68, bw-30, P.LRED, 6);
+      drawText('[Z] YES   [X] CANCEL', cx, cy0+82, P.YEL, 6);
     }
   }
 
@@ -1700,6 +1732,11 @@ function drawPause() {
 // ============================================================
 const CONE_RANGE       = 56;
 const CONE_HALF_ANGLE  = 35 * Math.PI / 180;
+// M6-T3: the 3 discrete alpha steps a cone ray can use, precomputed so
+// drawGuardCone doesn't build a fresh rgba(...) string every ray/frame.
+const CONE_ALPHA_NEAR = 'rgba(248,216,0,0.28)';
+const CONE_ALPHA_MID  = 'rgba(248,216,0,0.16)';
+const CONE_ALPHA_FAR  = 'rgba(248,216,0,0.08)';
 const SUSPICIOUS_FRAMES = 45;  // 0.75s @ 60fps
 const LOSE_SIGHT_FRAMES = 180; // 3s @ 60fps
 const GUARD_FACING_ANGLE = {down: Math.PI/2, up: -Math.PI/2, left: Math.PI, right: 0};
@@ -1866,8 +1903,7 @@ function drawGuardCone(g) {
     const a = facing - CONE_HALF_ANGLE + (2 * CONE_HALF_ANGLE) * (i / 8);
     const cos = Math.cos(a), sin = Math.sin(a);
     for (let d = 8; d <= CONE_RANGE; d += 8) {
-      const alpha = d < CONE_RANGE/3 ? 0.28 : d < CONE_RANGE*2/3 ? 0.16 : 0.08;
-      ctx.fillStyle = `rgba(248,216,0,${alpha})`;
+      ctx.fillStyle = d < CONE_RANGE/3 ? CONE_ALPHA_NEAR : d < CONE_RANGE*2/3 ? CONE_ALPHA_MID : CONE_ALPHA_FAR;
       ctx.fillRect(Math.round(gx + cos*d) - 1, Math.round(gy + sin*d) - 1, 2, 2);
     }
   }
@@ -2693,8 +2729,11 @@ function drawTitle() {
   drawText('ARROW KEYS: MOVE     Z: INTERACT', 30, hintY, P.DGRY, 5);
   drawText('X: SKIP     EXPLORE EVERYTHING', 34, hintY+10, P.DGRY, 5);
 
+  // M6-T4: release version string
+  drawText('v1.0 — CHAPTER ONE', 80, 216, P.GRY, 5);
+
   // NES copyright style
-  drawText('© BECK HAWTHORNE: ORIGIN  2024', 30, 225, '#303030', 5);
+  drawText('© BECK HAWTHORNE: ORIGIN  2026', 30, 226, '#303030', 5);
 }
 
 // ============================================================
@@ -3010,6 +3049,7 @@ function loop() {
 // ============================================================
 const _initSave = loadSave();
 if (_initSave && typeof _initSave.muted === 'boolean') AU.muted = _initSave.muted;
+if (_initSave && TEXT_SPEED_ORDER.includes(_initSave.textSpeed)) game.textSpeed = _initSave.textSpeed;
 restartGame();
 game.state = 'TITLE';
 requestAnimationFrame(loop);

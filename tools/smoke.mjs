@@ -19,6 +19,11 @@
 // real dialogue choice UI), and the 3-stage ending ceremony (ENDING ->
 // ENDING_REPORT mission card -> ENDING_TEASER -> TITLE with the save
 // cleared, a regression check on restartGame()).
+// Also covers M6: a mid-game save/reload/CONTINUE resuming at the dock
+// with evidence retained, 600 frames of frame-pacing measurement on the
+// dock (p99 < 20ms), and a touch-emulated context exercising the mobile
+// D-pad's movement, interact, and pause (Enter-equivalent) mechanics.
+// This is intended as the M6-T1 full-game bot run — run 3x per the DoD.
 // Fails (exit 1) on any console error or a failed assertion.
 // Screenshots each stage to tools/screens/.
 // ============================================================
@@ -350,6 +355,30 @@ async function main() {
     await waitFrames(page, 3);
   }
 
+  console.log('M6-T1: mid-game save/reload/CONTINUE — resuming at the dock with evidence retained...');
+  const beforeMidReload = await page.evaluate(() => ({
+    mapId: game.mapId, evidenceFound: game.evidenceFound.slice(),
+  }));
+  if (beforeMidReload.mapId !== 'dock' || beforeMidReload.evidenceFound.length !== 1) {
+    throw new Error(`Expected mid-game state at dock with 1 evidence before reload, got ${JSON.stringify(beforeMidReload)}`);
+  }
+  await page.reload();
+  await waitFrames(page, 10);
+  const midReloadTitleState = await page.evaluate(() => game.state);
+  if (midReloadTitleState !== 'TITLE') {
+    throw new Error(`Expected TITLE after mid-game reload, got '${midReloadTitleState}'`);
+  }
+  await page.keyboard.press('KeyZ'); // CONTINUE is idx 0 by default
+  await waitFrames(page, 10);
+  const afterMidContinue = await page.evaluate(() => ({
+    state: game.state, mapId: game.mapId, evidenceFound: game.evidenceFound,
+  }));
+  if (afterMidContinue.state !== 'EXPLORE' || afterMidContinue.mapId !== 'dock' ||
+      afterMidContinue.evidenceFound.length !== 1 || afterMidContinue.evidenceFound[0] !== 'evidence_manifest') {
+    throw new Error(`Mid-game CONTINUE did not restore dock progress, got ${JSON.stringify(afterMidContinue)}`);
+  }
+  await shot(page, 'mid-game-continue-dock');
+
   console.log('Checking the objective ticker fires after the 4th evidence...');
   await page.evaluate(() => {
     // Fast-forward: the manifest was already found above; simulate the
@@ -623,6 +652,102 @@ async function main() {
   }
   await page.keyboard.press('KeyM'); // restore
   await waitFrames(page, 2);
+
+  console.log('M6-T3: measuring 600 frames of real gameplay for steady 60fps (p99 < 20ms)...');
+  const perfContext = await browser.newContext();
+  const perfPage = await perfContext.newPage();
+  const perfErrors = [];
+  perfPage.on('console', msg => { if (msg.type() === 'error') perfErrors.push(msg.text()); });
+  perfPage.on('pageerror', err => perfErrors.push(String(err)));
+  await perfPage.goto('file://' + GAME_FILE);
+  await waitFrames(perfPage, 10);
+  // Jump straight to the dock — the heaviest scene (patrol guards + a
+  // per-frame vision-cone render for each) — rather than replaying the
+  // intro and bedroom puzzle just to measure frame pacing.
+  await perfPage.evaluate(() => { loadScene('dock'); pl.x = 8 * TW; pl.y = 8 * TH; updateCam(); });
+  await waitFrames(perfPage, 5);
+  await perfPage.evaluate(() => {
+    window.__frameTimes = [];
+    let last = performance.now();
+    (function sample() {
+      const now = performance.now();
+      window.__frameTimes.push(now - last);
+      last = now;
+      if (window.__frameTimes.length < 600) requestAnimationFrame(sample);
+    })();
+  });
+  // Walk in circles for the whole measurement window so guards, vision
+  // cones, and footstep dust are all actively rendering, not an idle frame.
+  const perfDirs = ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'];
+  for (let i = 0; i < 40; i++) {
+    const len = await perfPage.evaluate(() => window.__frameTimes.length);
+    if (len >= 600) break;
+    await holdDirection(perfPage, perfDirs[i % perfDirs.length], 15);
+  }
+  await perfPage.waitForFunction(() => window.__frameTimes.length >= 600, null, { timeout: 30000 });
+  const frameTimes = await perfPage.evaluate(() => window.__frameTimes.slice(0, 600));
+  const sortedTimes = [...frameTimes].sort((a, b) => a - b);
+  const p50 = sortedTimes[Math.floor(sortedTimes.length * 0.50)];
+  const p99 = sortedTimes[Math.floor(sortedTimes.length * 0.99)];
+  const maxFrame = sortedTimes[sortedTimes.length - 1];
+  console.log(`  frame time over 600 frames (ms): p50=${p50.toFixed(2)} p99=${p99.toFixed(2)} max=${maxFrame.toFixed(2)}`);
+  if (p99 >= 20) throw new Error(`p99 frame time ${p99.toFixed(2)}ms exceeds the 20ms budget`);
+  await perfContext.close();
+  if (perfErrors.length) errors.push(...perfErrors);
+
+  console.log('M6-T2: verifying the touch D-pad reaches every mechanic (movement, interact, pause)...');
+  const touchContext = await browser.newContext({ hasTouch: true });
+  const touchPage = await touchContext.newPage();
+  touchPage.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  touchPage.on('pageerror', err => errors.push(String(err)));
+  await touchPage.goto('file://' + GAME_FILE);
+  await waitFrames(touchPage, 10);
+
+  const hasTouchStart = await touchPage.evaluate(() => 'ontouchstart' in window);
+  if (!hasTouchStart) throw new Error('Expected ontouchstart in window under a touch-emulated context');
+  const padButtonCount = await touchPage.evaluate(() => document.querySelectorAll('button').length);
+  if (padButtonCount !== 7) throw new Error(`Expected 7 D-pad buttons (4 arrows, Z, X, II), found ${padButtonCount}`);
+
+  // Tap Z to start a new game from the title (no save exists in this fresh context).
+  await touchPage.click('button:text-is("Z")');
+  await waitFrames(touchPage, 10);
+  const touchIntroState = await touchPage.evaluate(() => game.state);
+  if (touchIntroState !== 'INTRO') throw new Error(`Expected INTRO after tapping the touch Z button, got '${touchIntroState}'`);
+
+  // Skip through the intro/chapter card into EXPLORE by tapping Z.
+  for (let i = 0; i < 5; i++) {
+    await touchPage.click('button:text-is("Z")');
+    await waitFrames(touchPage, 6);
+  }
+  await touchPage.waitForFunction(() => !transition.active, null, { timeout: 8000 });
+  await waitFrames(touchPage, 3);
+  const touchExploreState = await touchPage.evaluate(() => game.state);
+  if (touchExploreState !== 'EXPLORE') throw new Error(`Expected EXPLORE via the touch UI, got '${touchExploreState}'`);
+
+  // Hold the down-arrow touch button (pointerdown/pointerup, not a quick
+  // click) and confirm Beck actually moves — reaches the movement mechanic.
+  const beforeTouchMove = await touchPage.evaluate(() => ({ x: pl.x, y: pl.y }));
+  const downBtn = touchPage.locator('button:text-is("↓")');
+  await downBtn.dispatchEvent('pointerdown');
+  await waitFrames(touchPage, 20);
+  await downBtn.dispatchEvent('pointerup');
+  const afterTouchMove = await touchPage.evaluate(() => ({ x: pl.x, y: pl.y }));
+  if (afterTouchMove.x === beforeTouchMove.x && afterTouchMove.y === beforeTouchMove.y) {
+    throw new Error('Beck did not move after holding the touch D-pad down button');
+  }
+
+  // Tap the "II" (Enter-equivalent) button — reaches the pause mechanic.
+  await touchPage.click('button:text-is("II")');
+  await waitFrames(touchPage, 3);
+  const touchPausedState = await touchPage.evaluate(() => game.state);
+  if (touchPausedState !== 'PAUSED') throw new Error(`Expected PAUSED after tapping the touch pause button, got '${touchPausedState}'`);
+  await shot(touchPage, 'touch-dpad-pause');
+  await touchPage.click('button:text-is("II")');
+  await waitFrames(touchPage, 3);
+  const touchUnpausedState = await touchPage.evaluate(() => game.state);
+  if (touchUnpausedState !== 'EXPLORE') throw new Error(`Expected EXPLORE after tapping the touch pause button again, got '${touchUnpausedState}'`);
+
+  await touchContext.close();
 
   await browser.close();
 
