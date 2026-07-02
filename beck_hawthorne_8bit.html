@@ -151,7 +151,7 @@ dock: {
   ],
   npcs:[
     {x:15*TW, y:12*TH, id:'smuggler', col:P.RED, w:14, h:14,
-     dir:'down', speed:0.85, active:false, cooldown:0,
+     dir:'down', active:false, cooldown:0,
      guard:true, patrol:false, waypoints:[], wpIdx:0,
      state:'CALM', susTimer:0, sightTimer:0, alertSpeed:0.95},
     // Patrol guards — waypoint loops, walk speed 0.6 (M3-T1).
@@ -458,7 +458,9 @@ if ('ontouchstart' in window) setupTouch();
 // ============================================================
 const game = {
   state: 'TITLE',      // TITLE, CUTSCENE, EXPLORE, MINIGAME_PUZZLE,
-                       // DOCK_CHASE, DIALOGUE, ENDING, PAUSED
+                       // DIALOGUE, ENDING, PAUSED
+                       // (the dock finale runs inside EXPLORE, gated by
+                       // game.dockChaseActive — see M3-T4)
   frame: 0,
   mapId: 'bedroom',
   evidenceFound: [],   // filled with item ids
@@ -716,7 +718,7 @@ function advanceDialogue() {
   if (dlg.idx >= dlg.lines.length) {
     dlg.active  = false;
     dlg.choices = null;
-    game.state  = game.dockChaseActive ? 'DOCK_CHASE' : 'EXPLORE';
+    game.state  = 'EXPLORE';
     if (dlg.onDone) dlg.onDone();
     return;
   }
@@ -1101,10 +1103,11 @@ function drawMap() {
       } else if (id === 2) { // bed
         px(sx+1, sy+1, 14, 6, '#9060C0'); // pillow
         px(sx+1, sy+7, 14, 8, '#5030A0'); // sheet
-      } else if (id === 12) { // exit zone
-        const glowF = Math.floor(game.frame/15)%2;
+      } else if (id === 12) { // exit zone — flashes faster once the finale is live
+        const rate = game.dockChaseActive ? 6 : 15;
+        const glowF = Math.floor(game.frame/rate)%2;
         px(sx, sy, TW, TH, glowF ? '#30A840' : '#206830');
-        drawText('EXIT', sx+1, sy+10, P.YEL, 5);
+        drawText('EXIT', sx+1, sy+10, game.dockChaseActive ? P.WHT : P.YEL, 5);
       } else if (id === 16) { // evidence crate
         px(sx+1, sy+1, 14, 14, '#2C4830');
         px(sx+3, sy+3, 10, 10, '#1C3820');
@@ -1219,7 +1222,7 @@ function rectSolid(x, y, w, h) {
 // PLAYER MOVEMENT
 // ============================================================
 function updatePlayer() {
-  if (game.state !== 'EXPLORE' && game.state !== 'DOCK_CHASE') return;
+  if (game.state !== 'EXPLORE') return;
 
   let dx = 0, dy = 0;
   if (keys['ArrowLeft'] || keys['KeyA'])  dx = -pl.speed;
@@ -1343,10 +1346,10 @@ function handleItem(item) {
     startDialogue(allFound ? [
       ...lines,
       {speaker:'BECK', col:P.TEL, text:"That's everything. Four pieces of evidence. Time to get out."},
-      {speaker:'', text:'The smugglers haven\'t spotted you yet. Reach the EXIT at the top of the dock.'},
+      {speaker:'', text:'An alarm trips somewhere. Every guard on the dock is coming for you now.'},
       {speaker:'', text:'GET OUT NOW — reach the glowing EXIT at the top of the map!'},
     ] : lines, () => {
-      if (allFound) triggerDockChase();
+      if (allFound) triggerDockFinale();
     });
     return;
   }
@@ -1663,6 +1666,13 @@ function checkGuardCollision(g) {
     g.cooldown = 60;
     showDamageFlash();
     AU.sfx('hurt');
+    if (pl.hearts <= 0) {
+      startDialogue([
+        {speaker:'', text:'CAUGHT! A guard grabbed you.'},
+        {speaker:'', text:'Evidence still secured. You break free and run.'},
+        {speaker:'', text:'Try again — reach the EXIT at the top of the dock!'},
+      ], resetDockFinaleEncounter);
+    }
   }
 }
 
@@ -1674,7 +1684,16 @@ function updateGuards() {
     if (!g.guard || !g.active) return;
     if (g.cooldown > 0) g.cooldown--;
 
-    if (!g.patrol) return; // smuggler (guard #4) is wired up in M3-T4
+    // M3-T4: once the finale is live every guard (including the
+    // smuggler, guard #4) is permanently ALERT — no cone/timeout logic.
+    if (game.dockChaseActive) {
+      g.state = 'ALERT';
+      pursuePlayer(g, g.alertSpeed);
+      checkGuardCollision(g);
+      return;
+    }
+
+    if (!g.patrol) return; // smuggler (guard #4) stays dormant until the finale
 
     if (g.state === 'CALM') {
       patrolGuard(g);
@@ -1703,6 +1722,8 @@ function updateGuards() {
       }
     }
   });
+
+  checkDockExit();
 }
 
 // Translucent stepped-alpha yellow triangle of small rects — no ctx paths.
@@ -1732,78 +1753,38 @@ function drawGuardStateIcon(g, sx, sy) {
 }
 
 // ============================================================
-// DOCK CHASE
+// DOCK FINALE (M3-T4) — every guard permanently ALERT, race the EXIT
 // ============================================================
-function triggerDockChase() {
+// Replaces the old single-smuggler DOCK_CHASE special case: the finale
+// now runs inside plain EXPLORE, gated by the game.dockChaseActive flag,
+// and reuses the same guard state machine as the stealth phase.
+function triggerDockFinale() {
   game.dockChaseActive = true;
-  const smuggler = MAPS['dock'].npcs[0];
-  smuggler.active  = true;
-  smuggler.x       = 15 * TW;
-  smuggler.y       = 5  * TH;
-  game.state       = 'DOCK_CHASE';
+  MAPS['dock'].npcs.forEach(g => {
+    if (!g.guard) return;
+    g.active     = true;
+    g.state      = 'ALERT';
+    g.sightTimer = LOSE_SIGHT_FRAMES;
+  });
   AU.music('chase');
 }
 
-function updateDockChase() {
+function resetDockFinaleEncounter() {
+  pl.hearts     = 3;
+  pl.x          = MAPS['dock'].playerSpawn.x;
+  pl.y          = MAPS['dock'].playerSpawn.y;
+  pl.invincible = 120;
+  MAPS['dock'].npcs.forEach(g => { if (g.guard) g.cooldown = 0; });
+}
+
+function checkDockExit() {
   if (!game.dockChaseActive) return;
-
-  const map  = MAPS['dock'];
-  const smug = map.npcs[0];
-  if (!smug || !smug.active) return;
-
-  // Move smuggler toward player
-  const dx = (pl.x + pl.w/2) - (smug.x + 7);
-  const dy = (pl.y + pl.h/2) - (smug.y + 7);
-  const dist = Math.sqrt(dx*dx + dy*dy);
-
-  if (dist > 4) {
-    const nx = smug.x + (dx/dist) * smug.speed;
-    const ny = smug.y + (dy/dist) * smug.speed;
-    const m  = 2;
-    if (!rectSolid(nx+m, smug.y+m, smug.w-m*2, smug.h-m*2)) smug.x = nx;
-    if (!rectSolid(smug.x+m, ny+m, smug.w-m*2, smug.h-m*2)) smug.y = ny;
-    smug.dir = Math.abs(dx) > Math.abs(dy) ? (dx>0?'right':'left') : (dy>0?'down':'up');
-  }
-
-  if (smug.cooldown > 0) { smug.cooldown--; return; }
-
-  // Collision with player
-  if (
-    Math.abs((pl.x+pl.w/2) - (smug.x+7)) < 12 &&
-    Math.abs((pl.y+pl.h/2) - (smug.y+7)) < 12 &&
-    pl.invincible === 0
-  ) {
-    pl.hearts--;
-    pl.invincible = 80;
-    smug.cooldown = 60;
-    showDamageFlash();
-    AU.sfx('hurt');
-    if (pl.hearts <= 0) {
-      startDialogue([
-        {speaker:'', text:'CAUGHT! The smuggler grabbed you.'},
-        {speaker:'', text:'Evidence still secured. You manage to break free and run.'},
-        {speaker:'', text:'Try again — reach the EXIT at the top of the dock!'},
-      ], () => {
-        pl.hearts    = 3;
-        pl.x         = MAPS['dock'].playerSpawn.x;
-        pl.y         = MAPS['dock'].playerSpawn.y;
-        smug.x       = 15*TW;
-        smug.y       = 5*TH;
-        smug.cooldown= 0;
-        pl.invincible= 120;
-        game.state   = 'DOCK_CHASE';
-      });
-    }
-    return;
-  }
-
-  // Player reached exit
   const exitTX = 8, exitTY = 0;
   const exitX  = exitTX * TW;
   const exitY  = exitTY * TH;
   if (pl.x + pl.w > exitX && pl.x < exitX + TW && pl.y < exitY + TH*2) {
-    game.dockChaseActive  = false;
-    smug.active           = false;
+    game.dockChaseActive = false;
+    MAPS['dock'].npcs.forEach(g => { if (g.guard) g.active = false; });
     AU.sfx('success');
     startDialogue([
       {speaker:'', text:'You hit the street at full speed.'},
@@ -1813,10 +1794,7 @@ function updateDockChase() {
       {speaker:'', text:'Nobody knows it was you.'},
       {speaker:'', text:'Two weeks pass. Then something strange happens at school...'},
     ], () => { setObjective('Find Indy at school.', true); transitionToScene('school'); });
-    return;
   }
-
-  updatePlayer(); // allow player movement during chase
 }
 
 let damageFlash = 0;
@@ -2641,7 +2619,7 @@ function loop() {
   // Input is ignored entirely while a transition is playing.
   if (!transition.active) {
     if (justPressed['Enter']) {
-      if (game.state === 'EXPLORE' || game.state === 'DOCK_CHASE') openPause();
+      if (game.state === 'EXPLORE') openPause();
       else if (game.state === 'PAUSED') closePause();
     }
     switch (game.state) {
@@ -2667,12 +2645,6 @@ function loop() {
       break;
     case 'MINIGAME_PUZZLE':
       updatePuzzle();
-      break;
-    case 'DOCK_CHASE':
-      updatePlayer();
-      updateDockChase();
-      checkInteract();
-      updateCam();
       break;
     case 'PAUSED':
       updatePause();
