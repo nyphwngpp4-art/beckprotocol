@@ -7,6 +7,10 @@
 // captures the bedroom -> dock stepped-fade transition, and
 // checks the M1 audio engine (lazy AudioContext creation,
 // per-scene music tracks, pickup sfx, KeyM mute toggle).
+// Also covers M2: footstep dust, the pause menu's three tabs
+// (OBJECTIVE/EVIDENCE/OPTIONS) and its mute toggle, the
+// objective-ticker banner after the computer puzzle and after
+// the 4th evidence, and a dialogue portrait.
 // Fails (exit 1) on any console error or a failed assertion.
 // Screenshots each stage to tools/screens/.
 // ============================================================
@@ -114,12 +118,49 @@ async function main() {
   console.log('Walking each direction for 30 frames...');
   await holdDirection(page, 'ArrowDown', 30);
   await shot(page, 'walk-down');
+
+  console.log('Checking footstep dust spawned while walking...');
+  const dustActive = await page.evaluate(() => DUST.filter(d => d.active).length);
+  if (dustActive < 1) throw new Error('Expected at least one active dust particle after walking');
+
   await holdDirection(page, 'ArrowUp', 30);
   await shot(page, 'walk-up');
   await holdDirection(page, 'ArrowLeft', 30);
   await shot(page, 'walk-left');
   await holdDirection(page, 'ArrowRight', 30);
   await shot(page, 'walk-right');
+
+  console.log('Testing pause + evidence journal (Enter toggles PAUSED)...');
+  await page.keyboard.press('Enter');
+  await waitFrames(page, 3);
+  const pausedState = await page.evaluate(() => game.state);
+  if (pausedState !== 'PAUSED') throw new Error(`Expected PAUSED, got '${pausedState}'`);
+  await shot(page, 'pause-objective-tab');
+
+  await page.keyboard.press('ArrowRight');
+  await waitFrames(page, 3);
+  await shot(page, 'pause-evidence-tab');
+
+  await page.keyboard.press('ArrowRight');
+  await waitFrames(page, 3);
+  await shot(page, 'pause-options-tab');
+
+  console.log('Checking MUTE toggle on the pause OPTIONS tab...');
+  const pauseMutedBefore = await page.evaluate(() => AU.muted);
+  await page.keyboard.press('KeyZ'); // toggle mute (optIdx 0 is selected by default)
+  await waitFrames(page, 2);
+  const pauseMutedAfter = await page.evaluate(() => AU.muted);
+  if (pauseMutedAfter === pauseMutedBefore) {
+    throw new Error('Pause OPTIONS tab MUTE row did not toggle AU.muted');
+  }
+  await page.keyboard.press('KeyZ'); // toggle back off
+  await waitFrames(page, 2);
+
+  console.log('Unpausing with Enter...');
+  await page.keyboard.press('Enter');
+  await waitFrames(page, 3);
+  const unpausedState = await page.evaluate(() => game.state);
+  if (unpausedState !== 'EXPLORE') throw new Error(`Expected EXPLORE after unpause, got '${unpausedState}'`);
 
   console.log('Opening the computer puzzle...');
   // Place Beck next to the bedroom computer (tx:9, ty:6) so the
@@ -179,7 +220,20 @@ async function main() {
   }
   await waitFrames(page, 10);
   await page.keyboard.press('KeyZ'); // finish anomaly puzzle, starts closing dialogue
-  await waitFrames(page, 5);
+  await waitFrames(page, 2);
+
+  console.log('Checking the objective ticker fires after the computer puzzle...');
+  const objAfterPuzzle = await page.evaluate(() => ({
+    objective: game.objective, bannerTimer: game.objectiveBannerTimer,
+  }));
+  if (objAfterPuzzle.objective !== 'Get to the East Dock.') {
+    throw new Error(`Expected objective 'Get to the East Dock.', got '${objAfterPuzzle.objective}'`);
+  }
+  if (objAfterPuzzle.bannerTimer <= 0) {
+    throw new Error('Expected objectiveBannerTimer > 0 right after the objective change');
+  }
+  await waitFrames(page, 14); // let the banner finish sliding in before the screenshot
+  await shot(page, 'objective-banner-dock');
 
   // Drive the resulting dialogue to completion, always taking the
   // default (first) choice when one is offered.
@@ -225,8 +279,49 @@ async function main() {
   if (!sfxCalls.includes('pickup')) {
     throw new Error(`Expected 'pickup' sfx on evidence interact, got ${JSON.stringify(sfxCalls)}`);
   }
+
+  console.log('Advancing to the BECK dialogue line to capture her portrait...');
+  await page.keyboard.press('KeyZ'); // complete narrator line0 typing
+  await waitFrames(page, 3);
+  await page.keyboard.press('KeyZ'); // advance to line1 (BECK)
+  await waitFrames(page, 30);        // let the portrait line finish typing
+  await shot(page, 'dialogue-portrait-beck');
+
   // Drain the evidence dialogue so the game returns to EXPLORE.
   for (let i = 0; i < 20; i++) {
+    const active = await page.evaluate(() => dlg.active);
+    if (!active) break;
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
+
+  console.log('Checking the objective ticker fires after the 4th evidence...');
+  await page.evaluate(() => {
+    // Fast-forward: the manifest was already found above; simulate the
+    // other two mid-collection pieces so the next real pickup is the 4th.
+    game.evidenceFound = ['evidence_manifest', 'evidence_crates', 'evidence_photos'];
+    game.objectiveBannerTimer = 0;
+    // Teleport onto the plates evidence tile (tx:3, ty:13).
+    pl.x = 3 * TW + TW / 2 - pl.w / 2;
+    pl.y = 13 * TH + TH / 2 - pl.h / 2;
+  });
+  await waitFrames(page, 2);
+  await page.keyboard.press('KeyZ');
+  await waitFrames(page, 2);
+  const objAfter4th = await page.evaluate(() => ({
+    objective: game.objective, bannerTimer: game.objectiveBannerTimer,
+  }));
+  if (objAfter4th.objective !== 'Get out — reach the EXIT.') {
+    throw new Error(`Expected objective 'Get out — reach the EXIT.', got '${objAfter4th.objective}'`);
+  }
+  if (objAfter4th.bannerTimer <= 0) {
+    throw new Error('Expected objectiveBannerTimer > 0 right after the 4th-evidence objective change');
+  }
+  await waitFrames(page, 14); // let the banner finish sliding in before the screenshot
+  await shot(page, 'objective-banner-exit');
+
+  // Drain the resulting "all evidence found" dialogue (drops into DOCK_CHASE).
+  for (let i = 0; i < 30; i++) {
     const active = await page.evaluate(() => dlg.active);
     if (!active) break;
     await page.keyboard.press('KeyZ');
