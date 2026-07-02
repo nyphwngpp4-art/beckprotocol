@@ -1026,9 +1026,13 @@ function drawNPC(npc) {
     return;
   }
 
+  if (npc.guard) drawGuardCone(npc);
+
   const fr = Math.floor(game.frame/15) % 2;
   px(sx+2, npc.y - cam.y + npc.h, 11, 2, 'rgba(0,0,0,0.3)');
   drawNPCChar(sx, sy, npc, fr);
+
+  if (npc.guard) drawGuardStateIcon(npc, sx, sy);
 
   // Name tag
   const labels = {indy:'INDY', sterling:'STERLING', kane:'KANE'};
@@ -1534,8 +1538,14 @@ function drawPause() {
 }
 
 // ============================================================
-// GUARD AI — patrol waypoints (M3-T1)
+// GUARD AI — patrol, vision cones, CALM/SUSPICIOUS/ALERT (M3-T1, M3-T2)
 // ============================================================
+const CONE_RANGE       = 56;
+const CONE_HALF_ANGLE  = 35 * Math.PI / 180;
+const SUSPICIOUS_FRAMES = 45;  // 0.75s @ 60fps
+const LOSE_SIGHT_FRAMES = 180; // 3s @ 60fps
+const GUARD_FACING_ANGLE = {down: Math.PI/2, up: -Math.PI/2, left: Math.PI, right: 0};
+
 function patrolGuard(g) {
   const target = g.waypoints[g.wpIdx];
   const dx = target.x - g.x, dy = target.y - g.y;
@@ -1549,12 +1559,131 @@ function patrolGuard(g) {
   g.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
 }
 
+function faceTowardPlayer(g) {
+  const dx = (pl.x + pl.w/2) - (g.x + g.w/2);
+  const dy = (pl.y + pl.h/2) - (g.y + g.h/2);
+  g.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
+
+function pursuePlayer(g, speed) {
+  const dx = (pl.x + pl.w/2) - (g.x + g.w/2);
+  const dy = (pl.y + pl.h/2) - (g.y + g.h/2);
+  const dist = Math.hypot(dx, dy);
+  if (dist <= 4) return;
+  const nx = g.x + (dx/dist) * speed, ny = g.y + (dy/dist) * speed;
+  const m = 2;
+  if (!rectSolid(nx + m, g.y + m, g.w - m*2, g.h - m*2)) g.x = nx;
+  if (!rectSolid(g.x + m, ny + m, g.w - m*2, g.h - m*2)) g.y = ny;
+  g.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
+
+// Facing cone + step-every-4px line of sight; blocked by any solid tile.
+function guardSeesPlayer(g) {
+  const gx = g.x + g.w/2, gy = g.y + g.h/2;
+  const tx = pl.x + pl.w/2, ty = pl.y + pl.h/2;
+  const dx = tx - gx, dy = ty - gy;
+  const dist = Math.hypot(dx, dy);
+  if (dist > CONE_RANGE) return false;
+
+  const facing = GUARD_FACING_ANGLE[g.dir] || 0;
+  let diff = Math.atan2(dy, dx) - facing;
+  diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // wrap to [-PI, PI]
+  if (Math.abs(diff) > CONE_HALF_ANGLE) return false;
+
+  const steps = Math.max(1, Math.ceil(dist / 4));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (tileSolid(Math.floor((gx + dx*t) / TW), Math.floor((gy + dy*t) / TH))) return false;
+  }
+  return true;
+}
+
+function returnGuardToPatrol(g) {
+  g.state = 'CALM';
+  if (!g.patrol) return;
+  let nearest = 0, best = Infinity;
+  g.waypoints.forEach((wp, i) => {
+    const d = Math.hypot(wp.x - g.x, wp.y - g.y);
+    if (d < best) { best = d; nearest = i; }
+  });
+  g.wpIdx = nearest;
+}
+
+function checkGuardCollision(g) {
+  if (g.cooldown > 0 || pl.invincible > 0) return;
+  const gx = g.x + g.w/2, gy = g.y + g.h/2;
+  if (Math.abs((pl.x+pl.w/2) - gx) < 12 && Math.abs((pl.y+pl.h/2) - gy) < 12) {
+    pl.hearts--;
+    pl.invincible = 80;
+    g.cooldown = 60;
+    showDamageFlash();
+    AU.sfx('hurt');
+  }
+}
+
 function updateGuards() {
   if (game.mapId !== 'dock') return;
-  MAPS['dock'].npcs.forEach(g => {
-    if (!g.guard || !g.active || !g.patrol) return;
-    patrolGuard(g);
+  const map = MAPS['dock'];
+
+  map.npcs.forEach(g => {
+    if (!g.guard || !g.active) return;
+    if (g.cooldown > 0) g.cooldown--;
+
+    if (!g.patrol) return; // smuggler (guard #4) is wired up in M3-T4
+
+    if (g.state === 'CALM') {
+      patrolGuard(g);
+      if (guardSeesPlayer(g)) { g.state = 'SUSPICIOUS'; g.susTimer = SUSPICIOUS_FRAMES; }
+    } else if (g.state === 'SUSPICIOUS') {
+      faceTowardPlayer(g);
+      if (guardSeesPlayer(g)) {
+        g.susTimer--;
+        if (g.susTimer <= 0) {
+          g.state = 'ALERT';
+          g.sightTimer = LOSE_SIGHT_FRAMES;
+          AU.sfx('alert');
+          AU.music('chase');
+        }
+      } else {
+        g.state = 'CALM';
+      }
+    } else if (g.state === 'ALERT') {
+      pursuePlayer(g, g.alertSpeed);
+      checkGuardCollision(g);
+      if (guardSeesPlayer(g)) g.sightTimer = LOSE_SIGHT_FRAMES; else g.sightTimer--;
+      if (g.sightTimer <= 0) {
+        returnGuardToPatrol(g);
+        const stillAlert = map.npcs.some(o => o.guard && o.active && o.state === 'ALERT');
+        if (!stillAlert) AU.music('dock');
+      }
+    }
   });
+}
+
+// Translucent stepped-alpha yellow triangle of small rects — no ctx paths.
+// Hidden once a guard is ALERT (it's beelining for the player, not scanning).
+function drawGuardCone(g) {
+  if (g.state === 'ALERT') return;
+  const gx = g.x - cam.x + g.w/2, gy = g.y - cam.y + g.h/2;
+  const facing = GUARD_FACING_ANGLE[g.dir] || 0;
+  for (let i = 0; i <= 8; i++) {
+    const a = facing - CONE_HALF_ANGLE + (2 * CONE_HALF_ANGLE) * (i / 8);
+    const cos = Math.cos(a), sin = Math.sin(a);
+    for (let d = 8; d <= CONE_RANGE; d += 8) {
+      const alpha = d < CONE_RANGE/3 ? 0.28 : d < CONE_RANGE*2/3 ? 0.16 : 0.08;
+      ctx.fillStyle = `rgba(248,216,0,${alpha})`;
+      ctx.fillRect(Math.round(gx + cos*d) - 1, Math.round(gy + sin*d) - 1, 2, 2);
+    }
+  }
+}
+
+// Blinking '?' (SUSPICIOUS) / '!' (ALERT) above a guard's head.
+function drawGuardStateIcon(g, sx, sy) {
+  if (g.state === 'CALM' || Math.floor(game.frame/10) % 2 === 0) return;
+  const icon = g.state === 'SUSPICIOUS' ? '?' : '!';
+  const col2 = g.state === 'SUSPICIOUS' ? P.YEL : P.RED;
+  px(sx+4, sy-9, 7, 8, P.BLK);
+  drawText(icon, sx+6, sy-3, col2, 7);
 }
 
 // ============================================================
