@@ -85,6 +85,11 @@ const T = {
   19:{c:'#504030',s:1},  // cafeteria table
   20:{c:'#302818',s:1},  // dark dock border
   21:{c:'#484848',s:1},  // wall (school/cafe)
+  22:{c:P.WLCL,   s:1},  // bedroom wall — PATTERN LOCK poster (M4-T3)
+  23:{c:P.SCHW,   s:1},  // school wall — hallway door (M4-T1)
+  24:{c:P.SCHW,   s:1},  // school wall — bulletin board (M4-T1)
+  25:{c:P.LOC,    s:1},  // school — trophy case (M4-T1)
+  26:{c:P.SCHW,   s:1},  // cafeteria wall — lunch line counter (M4-T2)
 };
 
 // ============================================================
@@ -93,7 +98,8 @@ const T = {
 const W0=0,BF=1,BD=2,DK=3,CO=4,WN=5,BS=6,DR=7, // bedroom
       DF=8,CR=9,MW=10,FN=11,EX=12,               // dock
       SF=13,SW=14,LK=15,EC=16,SH=17,CF=18,CT=19, // school/cafe
-      DB=20,MT=21;                                 // misc
+      DB=20,MT=21,                                 // misc
+      PO=22,SD=23,BB=24,TR=25,LC=26;               // M4 dressing (bedroom/school/cafe)
 
 const MAPS = {
 
@@ -103,7 +109,7 @@ bedroom: {
   playerSpawn:{x:7*TW+8, y:8*TH},
   bgCol:'#04030C',
   rows:[
-    [W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0,W0],
+    [W0,W0,W0,W0,W0,W0,W0,W0,PO,PO,PO,W0,W0,W0,W0,W0],
     [W0,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
     [W0,BD,BD,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,WN,WN,W0],
     [W0,BD,BD,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,BF,W0],
@@ -117,6 +123,12 @@ bedroom: {
   ],
   items:[
     {tx:9, ty:6, id:'computer', label:'[Z] Pattern Lock'},
+    {tx:1, ty:2, id:'bed', label:'[Z] Inspect bed', flavor:true,
+     text:"Still unmade. Some things don't change."},
+    {tx:9, ty:5, id:'bookshelf', label:'[Z] Inspect bookshelf', flavor:true,
+     text:'Spy novels, physics textbooks, and one very embarrassing diary from sixth grade.'},
+    {tx:13, ty:2, id:'window', label:'[Z] Look outside', flavor:true,
+     text:'Rain again. Good thinking weather.'},
   ],
   npcs:[],
 },
@@ -176,9 +188,9 @@ school: {
   playerSpawn:{x:2*TW, y:5*TH},
   bgCol:'#1C1410',
   rows:[
-    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,SW,SW,BB,SW,SW,SW,SW,SD,SD,SW,SW,SW,SW,BB,SW,SW,SW,SW,SW],
     [SW,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SW],
-    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
+    [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,TR],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
@@ -186,7 +198,7 @@ school: {
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [LK,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,LK],
     [SW,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SF,SW],
-    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,SW,SW,SW,SW,SD,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
   ],
   items:[],
   npcs:[
@@ -195,6 +207,19 @@ school: {
     // arrow marker
     {x:18*TW, y:5*TH, id:'cafe_arrow', col:P.YEL, w:12, h:12,
      dir:'right', speed:0, active:true, cooldown:0},
+    // Wandering student NPCs — random-waypoint, non-interactive flavor
+    // one-liners (M4-T1). Bounds kept well inside the open floor
+    // (cols 2-17, rows 2-8) so rectSolid() never needs to route them
+    // around lockers or the border walls.
+    {x:4*TW, y:3*TH, id:'student1', col:P.LGRN, w:12, h:14, dir:'down',
+     speed:0, active:true, cooldown:0, wander:true, wanderSpeed:0.35,
+     wanderBounds:{x0:2*TW, y0:2*TH, x1:17*TW, y1:8*TH}, wanderPause:0},
+    {x:10*TW, y:7*TH, id:'student2', col:P.LBLU, w:12, h:14, dir:'up',
+     speed:0, active:true, cooldown:0, wander:true, wanderSpeed:0.3,
+     wanderBounds:{x0:2*TW, y0:2*TH, x1:17*TW, y1:8*TH}, wanderPause:40},
+    {x:14*TW, y:4*TH, id:'student3', col:P.AMB, w:12, h:14, dir:'left',
+     speed:0, active:true, cooldown:0, wander:true, wanderSpeed:0.32,
+     wanderBounds:{x0:2*TW, y0:2*TH, x1:17*TW, y1:8*TH}, wanderPause:90},
   ],
 },
 
@@ -204,7 +229,7 @@ cafeteria: {
   playerSpawn:{x:2*TW, y:7*TH},
   bgCol:'#181008',
   rows:[
-    [SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
+    [SW,LC,LC,LC,LC,LC,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW,SW],
     [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
     [SW,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CT,CT,CT,CF,CF,CF,CF,SW],
     [SW,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,CF,SW],
@@ -225,6 +250,18 @@ cafeteria: {
      dir:'down', speed:0, active:true, cooldown:0},
     {x:10*TW, y:3*TH, id:'kane',     col:P.LGRY, w:12, h:14,
      dir:'down', speed:0, active:true, cooldown:0},
+    // Seated student NPCs (M4-T2) — planted at the two outer table
+    // clusters (cols 2-4 and 12-14), well clear of Sterling & Kane's
+    // table (cols 7-9) so the empty tables around the agents read as
+    // deliberate staging, not an accident.
+    {x:2*TW,  y:3*TH, id:'cafe1', col:P.LGRN, w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
+    {x:4*TW,  y:3*TH, id:'cafe2', col:P.AMB,  w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
+    {x:13*TW, y:7*TH, id:'cafe3', col:P.PUR,  w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
+    {x:14*TW, y:7*TH, id:'cafe4', col:P.TEL,  w:12, h:14,
+     dir:'down', speed:0, active:true, cooldown:0, seated:true},
   ],
 },
 
@@ -467,9 +504,13 @@ if ('ontouchstart' in window) setupTouch();
 // ============================================================
 const game = {
   state: 'TITLE',      // TITLE, CUTSCENE, EXPLORE, MINIGAME_PUZZLE,
-                       // DIALOGUE, ENDING, PAUSED
+                       // DIALOGUE, ENDING, ENDING_REPORT, ENDING_TEASER,
+                       // PAUSED
                        // (the dock finale runs inside EXPLORE, gated by
                        // game.dockChaseActive — see M3-T4)
+                       // (ENDING -> ENDING_REPORT -> ENDING_TEASER is the
+                       // M5-T2 ending ceremony; each stage advances on
+                       // [Z] through a stepped fade — see drawEnding*)
   frame: 0,
   mapId: 'bedroom',
   evidenceFound: [],   // filled with item ids
@@ -481,7 +522,18 @@ const game = {
   objective: '',
   objectiveBannerTimer: 0,
   shadowTaught: false, // M3-T3: has the "Shadows hide you." toast fired yet?
+  textSpeed: 'NORMAL', // M6-T2: NORMAL / FAST / INSTANT — pause OPTIONS tab
 };
+
+// M6-T2: frames-per-character for each text-speed setting (INSTANT skips
+// the typewriter entirely — see updateDialogue).
+const TEXT_SPEED_FRAMES = { NORMAL: 2, FAST: 1, INSTANT: 0 };
+const TEXT_SPEED_ORDER  = ['NORMAL', 'FAST', 'INSTANT'];
+function cycleTextSpeed() {
+  const i = TEXT_SPEED_ORDER.indexOf(game.textSpeed);
+  game.textSpeed = TEXT_SPEED_ORDER[(i + 1) % TEXT_SPEED_ORDER.length];
+  saveSettings(); // a preference, not progress — never touch the save slot
+}
 
 // Player
 const pl = {
@@ -525,7 +577,10 @@ function saveGame() {
 
 function saveSettings() {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ muted: AU.muted }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      muted: AU.muted,
+      textSpeed: game.textSpeed,
+    }));
   } catch (e) { /* ignore */ }
 }
 
@@ -775,11 +830,18 @@ function updateDialogue() {
 
   dlg.choices = null;
   if (dlg.charIdx < (cur.text || '').length) {
-    dlg.charTimer++;
-    if (dlg.charTimer >= 2) {
-      dlg.charTimer = 0;
-      dlg.charIdx++;
-      if (dlg.charIdx % 2 === 0) AU.sfx('text');
+    const framesPerChar = TEXT_SPEED_FRAMES[game.textSpeed] ?? 2;
+    if (framesPerChar === 0) {
+      // INSTANT: reveal the whole line at once, no typewriter.
+      dlg.charIdx = (cur.text || '').length;
+      AU.sfx('text');
+    } else {
+      dlg.charTimer++;
+      if (dlg.charTimer >= framesPerChar) {
+        dlg.charTimer = 0;
+        dlg.charIdx++;
+        if (dlg.charIdx % 2 === 0) AU.sfx('text');
+      }
     }
   }
   if (justPressed['KeyZ'] || justPressed['KeyX']) advanceDialogue();
@@ -1023,7 +1085,20 @@ function drawNPCChar(sx, sy, npc, fr) {
 
   // Body/suit colour
   const bodyCol = (id==='indy') ? '#E84898' : (id==='sterling') ? '#2858A0'
-                : (id==='kane')  ? '#505050'  : (npc.patrol) ? '#282828' : '#800000';
+                : (id==='kane')  ? '#505050'  : (npc.patrol) ? '#282828'
+                : (npc.wander || npc.seated) ? npc.col : '#800000';
+
+  // Seated cafeteria students (M4-T2): chair-back rect drawn first, then
+  // torso/arms only — no legs, no walk-cycle offsets.
+  if (npc.seated) {
+    r(2,10, 10,11, '#402C1C');   // chair back
+    drawNPCHead(sx, sy, npc);
+    r(3,13, 8,7, bodyCol);       // torso (short — seated at table height)
+    r(6,13, 2,7, '#00000030');   // seam
+    r(1,14, 2,5, bodyCol);       // arms
+    r(11,14,2,5, bodyCol);
+    return;
+  }
 
   drawNPCHead(sx, sy, npc);
 
@@ -1094,6 +1169,10 @@ function drawNPC(npc) {
 // ============================================================
 // MAP RENDERING
 // ============================================================
+// M6-T3: hoisted out of the per-tile hot loop below (was a fresh array
+// literal per window tile per frame).
+const WINDOW_RAIN_COLS = [2, 4, 11, 13];
+
 function drawMap() {
   const map  = MAPS[game.mapId];
   const rows = map.rows;
@@ -1142,19 +1221,52 @@ function drawMap() {
           px(sx+1+i*8, sy+TH/2, 6, 1, '#2C2018');
           px(sx+5+i*8, sy+4, 2, 2, '#787060');
         }
-      } else if (id === 5) { // window (bedroom)
-        px(sx+1, sy+1, 14, 14, '#3060A0');
-        px(sx+7, sy+1, 2,  14, '#204070');
-        px(sx+1, sy+7, 14, 2,  '#204070');
-        // Stars
-        if (game.frame%60<30) px(sx+3, sy+3, 1, 1, P.WHT);
-        px(sx+11, sy+10, 1, 1, P.WHT);
+      } else if (id === 5) { // window (bedroom) — animated rain (M4-T3)
+        px(sx+1, sy+1, 14, 14, '#1C2C48');
+        px(sx+7, sy+1, 2,  14, '#142338');
+        px(sx+1, sy+7, 14, 2,  '#142338');
+        for (let i = 0; i < WINDOW_RAIN_COLS.length; i++) {
+          const ry = sy + 1 + ((game.frame*2 + i*5) % 14);
+          px(sx + WINDOW_RAIN_COLS[i], ry, 1, 3, '#78B0E8');
+        }
       } else if (id === 11) { // fence
         px(sx+7, sy, 2, TH, '#555555');
         for (let fy=0;fy<TH;fy+=4) px(sx, sy+fy, TW, 1, '#444444');
-      } else if (id === 19) { // cafeteria table
+      } else if (id === 19) { // cafeteria table — with food trays (M4-T2)
         px(sx+1, sy+3, 14, 10, '#604C30');
         px(sx+1, sy+3, 14, 2,  '#705838');
+        px(sx+2,  sy+6, 5, 4, '#B8B8B8');  // tray
+        px(sx+3,  sy+7, 1, 1, P.RED);      // food blob
+        px(sx+9,  sy+6, 5, 4, '#B8B8B8');  // second tray
+        px(sx+11, sy+7, 1, 1, P.LGRN);
+      } else if (id === 22) { // bedroom wall — PATTERN LOCK poster (M4-T3)
+        px(sx+2, sy+2, 12, 12, '#20182C');  // poster backing
+        px(sx+3, sy+3, 10, 10, '#382848');  // paper
+        px(sx+6, sy+5, 1, 3, P.TEL);        // padlock shackle (left)
+        px(sx+9, sy+5, 1, 3, P.TEL);        // padlock shackle (right)
+        px(sx+6, sy+5, 4, 1, P.TEL);        // padlock shackle (top)
+        px(sx+5, sy+8, 6, 4, P.TEL);        // padlock body
+        px(sx+7, sy+9, 2, 2, '#20182C');    // keyhole
+      } else if (id === 23) { // school hallway door (M4-T1)
+        px(sx+2, sy+1, 12, 14, '#241A10');
+        px(sx+3, sy+2, 10, 12, '#3C2C1C');
+        px(sx+11, sy+8, 2, 2, '#B89050'); // knob
+      } else if (id === 24) { // school bulletin board (M4-T1)
+        px(sx+2, sy+2, 12, 12, '#5C4020');
+        px(sx+3, sy+3, 4, 4, P.WHT);
+        px(sx+9, sy+3, 4, 4, P.AMB);
+        px(sx+3, sy+9, 4, 4, P.LGRN);
+        px(sx+9, sy+9, 4, 4, P.LBLU);
+      } else if (id === 25) { // school trophy case (M4-T1)
+        px(sx+1, sy+1, 14, 14, '#403828');
+        px(sx+2, sy+2, 12, 12, '#8CB8D8');
+        px(sx+6, sy+9, 4, 5, P.AMB);   // trophy cup
+        px(sx+7, sy+6, 2, 4, P.AMB);
+      } else if (id === 26) { // cafeteria lunch-line counter (M4-T2)
+        px(sx, sy+8, TW, 8, '#403020');
+        px(sx, sy+6, TW, 2, '#684C2C');
+        px(sx+2, sy+2, 4, 4, '#B8B8B8'); // steam-tray glint
+        px(sx+10, sy+2, 4, 4, '#B8B8B8');
       } else if (id === 9) { // shipping crate — plank + cross brace
         px(sx+1, sy+1, 14, 14, '#6C4820');
         px(sx+3, sy+3, 10, 10, '#5C3818');
@@ -1208,15 +1320,42 @@ function drawMap() {
   map2.items.forEach(item => {
     if (game.evidenceFound.includes(item.id)) return;
     if (item.id === 'computer') return; // always show computer
+    if (item.flavor) return; // flavor items are found by exploring, not flagged
     const sx = item.tx * TW - cam.x;
     const sy = item.ty * TH - cam.y;
     if (Math.floor(game.frame/15)%2===0) {
+      // M6-T2: colorblind check — a pulsing corner outline gives the
+      // marker a shape signal independent of the amber fill, so it still
+      // reads without relying on color alone.
+      const pr = (Math.floor(game.frame/8) % 2) ? 3 : 1;
+      px(sx+4-pr,  sy-6-pr, 1, 1, P.WHT);
+      px(sx+11+pr, sy-6-pr, 1, 1, P.WHT);
+      px(sx+4-pr,  sy-1+pr, 1, 1, P.WHT);
+      px(sx+11+pr, sy-1+pr, 1, 1, P.WHT);
       px(sx+4, sy-6, 8, 6, P.AMB);
       drawText('!', sx+6, sy-2, P.BLK, 5);
     }
   });
 
+  if (game.mapId === 'bedroom') drawBedroomDecor();
+
   drawEvidenceEffects();
+}
+
+// Rug + clothes pile floor dressing (M4-T3) — purely cosmetic, drawn on
+// top of open floor tiles so collision/pathing is untouched.
+function drawBedroomDecor() {
+  // Rug — open floor patch below the bed.
+  const rx = 1*TW - cam.x, ry = 5*TH - cam.y;
+  px(rx, ry, 4*TW, 3*TH, '#5C2C38');
+  px(rx+2, ry+2, 4*TW-4, 3*TH-4, '#742838');
+  px(rx+4, ry+4, 4*TW-8, 3*TH-8, '#5C2C38');
+
+  // Clothes pile — open floor corner near the foot of the bed.
+  const cx = 3*TW - cam.x, cy = 3*TH - cam.y;
+  px(cx+2,  cy+8,  8, 5, P.TEL);
+  px(cx+6,  cy+5,  7, 6, '#8C5820');
+  px(cx+1,  cy+10, 5, 4, '#C0C0C0');
 }
 
 // ============================================================
@@ -1334,6 +1473,11 @@ function handleItem(item) {
     return;
   }
 
+  if (item.flavor) { // bedroom flavor items (M4-T3) — don't count as evidence
+    startDialogue([{speaker:'BECK', col:P.TEL, text:item.text}]);
+    return;
+  }
+
   if (item.id.startsWith('evidence_') && !game.evidenceFound.includes(item.id)) {
     const texts = {
       evidence_manifest: [
@@ -1359,6 +1503,7 @@ function handleItem(item) {
     };
 
     game.evidenceFound.push(item.id);
+    saveGame(); // M6-T1: evidence progress is real player progress — checkpoint it
     AU.sfx('pickup');
     spawnEvidenceEffect(item.tx, item.ty);
 
@@ -1385,10 +1530,23 @@ function handleItem(item) {
 // ============================================================
 // NPC INTERACTIONS
 // ============================================================
+// One-liners for the M4-T1/T2 flavor NPCs — wandering hallway students
+// and seated cafeteria students. Non-plot, ambient dressing only.
+const FLAVOR_LINES = {
+  student1: 'Did you see the news about the dock? Something about a weapons bust.',
+  student2: 'Ms. Patterson gave a pop quiz. On a Friday. Who does that.',
+  student3: "I heard there's a couple of visitors in the front office. Feds, probably.",
+  cafe1:    'Trade you my fries for your cookie.',
+  cafe2:    "Did you see those two suits at Kane's table? Total narcs.",
+  cafe3:    "I'm just saying, cafeteria pizza tastes like cardboard with extra steps.",
+  cafe4:    "Shh, don't stare. I think they're FBI.",
+};
+
 function handleNPC(npc) {
   if (npc.id === 'indy') startIndyDialogue();
   else if (npc.id === 'sterling') startRecruitmentDialogue();
   else if (npc.id === 'kane')     startRecruitmentDialogue();
+  else if (FLAVOR_LINES[npc.id])  startDialogue([{speaker:'', text:FLAVOR_LINES[npc.id]}]);
 }
 
 function startIndyDialogue() {
@@ -1439,6 +1597,11 @@ function startRecruitmentDialogue() {
     {speaker:'BECK', col:P.TEL, text:"How did you get into my school?"},
     {speaker:'STERLING', col:P.LBLU, text:"Authorization from the district. The visit is legitimate."},
     {speaker:'KANE', col:P.LGRY, text:"Unlike your walk to the East Dock, which was not."},
+    // M5-T1: choice echo — Kane calls out that Beck told a civilian (Indy)
+    // everything, if that's the branch the player picked earlier.
+    ...(game.choices.indy === 'full'
+      ? [{speaker:'KANE', col:P.LGRY, text:"You told a civilian, too. Your friend. That's a second name on a list that shouldn't exist."}]
+      : []),
     {choices:[
       {text:'"I don\'t know what you mean."', pick:['lunch1','deny'], jump:'lunch_deny'},
       {text:'"How long have you known?"',     pick:['lunch1','ask'],  jump:'lunch_ask'},
@@ -1529,9 +1692,10 @@ function updatePause() {
     return;
   }
   if (justPressed['ArrowUp'])   pause.optIdx = Math.max(0, pause.optIdx - 1);
-  if (justPressed['ArrowDown']) pause.optIdx = Math.min(1, pause.optIdx + 1);
+  if (justPressed['ArrowDown']) pause.optIdx = Math.min(2, pause.optIdx + 1);
   if (justPressed['KeyZ']) {
     if (pause.optIdx === 0) AU.toggleMute();
+    else if (pause.optIdx === 1) { cycleTextSpeed(); AU.sfx('confirm'); }
     else { pause.confirmRestart = true; AU.sfx('cancel'); }
   }
 }
@@ -1573,15 +1737,15 @@ function drawPause() {
         cx+22, y, bw-56, found ? P.WHT : '#505050', 6);
     });
   } else {
-    const opts = ['MUTE: ' + (AU.muted ? 'ON' : 'OFF'), 'RESTART CHAPTER'];
+    const opts = ['MUTE: ' + (AU.muted ? 'ON' : 'OFF'), 'TEXT SPEED: ' + game.textSpeed, 'RESTART CHAPTER'];
     opts.forEach((label, i) => {
       const sel = i === pause.optIdx;
       const y = cy0 + 16 + i * 16;
       drawText((sel ? '▶ ' : '  ') + label, cx, y, sel ? P.YEL : P.LGRY, 7);
     });
     if (pause.confirmRestart) {
-      drawWrappedText('Restart the chapter? Progress will be lost.', cx, cy0+52, bw-30, P.LRED, 6);
-      drawText('[Z] YES   [X] CANCEL', cx, cy0+66, P.YEL, 6);
+      drawWrappedText('Restart the chapter? Progress will be lost.', cx, cy0+68, bw-30, P.LRED, 6);
+      drawText('[Z] YES   [X] CANCEL', cx, cy0+82, P.YEL, 6);
     }
   }
 
@@ -1593,6 +1757,11 @@ function drawPause() {
 // ============================================================
 const CONE_RANGE       = 56;
 const CONE_HALF_ANGLE  = 35 * Math.PI / 180;
+// M6-T3: the 3 discrete alpha steps a cone ray can use, precomputed so
+// drawGuardCone doesn't build a fresh rgba(...) string every ray/frame.
+const CONE_ALPHA_NEAR = 'rgba(248,216,0,0.28)';
+const CONE_ALPHA_MID  = 'rgba(248,216,0,0.16)';
+const CONE_ALPHA_FAR  = 'rgba(248,216,0,0.08)';
 const SUSPICIOUS_FRAMES = 45;  // 0.75s @ 60fps
 const LOSE_SIGHT_FRAMES = 180; // 3s @ 60fps
 const GUARD_FACING_ANGLE = {down: Math.PI/2, up: -Math.PI/2, left: Math.PI, right: 0};
@@ -1763,8 +1932,7 @@ function drawGuardCone(g) {
     const a = facing - CONE_HALF_ANGLE + (2 * CONE_HALF_ANGLE) * (i / 8);
     const cos = Math.cos(a), sin = Math.sin(a);
     for (let d = 8; d <= CONE_RANGE; d += 8) {
-      const alpha = d < CONE_RANGE/3 ? 0.28 : d < CONE_RANGE*2/3 ? 0.16 : 0.08;
-      ctx.fillStyle = `rgba(248,216,0,${alpha})`;
+      ctx.fillStyle = d < CONE_RANGE/3 ? CONE_ALPHA_NEAR : d < CONE_RANGE*2/3 ? CONE_ALPHA_MID : CONE_ALPHA_FAR;
       ctx.fillRect(Math.round(gx + cos*d) - 1, Math.round(gy + sin*d) - 1, 2, 2);
     }
   }
@@ -1966,6 +2134,44 @@ function checkCafeArrow() {
   if (pl.x + pl.w > arrow.x - 8 && pl.x < arrow.x + 20) {
     transitionToScene('cafeteria');
   }
+}
+
+// ============================================================
+// WANDERING NPCS — random-waypoint students (M4-T1)
+// ============================================================
+// On reaching a target, pause briefly then pick a new random point
+// inside the NPC's wanderBounds. Bounds are kept well inside the open
+// floor so rectSolid() never needs to route them around obstacles.
+function updateWanderers() {
+  const map = MAPS[game.mapId];
+  map.npcs.forEach(n => {
+    if (!n.wander || !n.active) return;
+
+    if (n.wanderPause > 0) { n.wanderPause--; return; }
+
+    if (!n.wanderTarget) {
+      const b = n.wanderBounds;
+      n.wanderTarget = {
+        x: b.x0 + Math.random() * (b.x1 - b.x0),
+        y: b.y0 + Math.random() * (b.y1 - b.y0),
+      };
+    }
+
+    const dx = n.wanderTarget.x - n.x, dy = n.wanderTarget.y - n.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 3) {
+      n.wanderTarget = null;
+      n.wanderPause = 60 + Math.floor(Math.random() * 120); // idle 1-3s
+      return;
+    }
+
+    const nx = n.x + (dx / dist) * n.wanderSpeed;
+    const ny = n.y + (dy / dist) * n.wanderSpeed;
+    const m = 2;
+    if (!rectSolid(nx + m, n.y + m, n.w - m*2, n.h - m*2)) n.x = nx;
+    if (!rectSolid(n.x + m, ny + m, n.w - m*2, n.h - m*2)) n.y = ny;
+    n.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  });
 }
 
 // ============================================================
@@ -2267,6 +2473,45 @@ const INTRO_SLIDES = [
 
 const intro = { slide: 0, timer: 0 };
 
+// M5-T3: one small pixel-art vignette above each slide's text — satellite
+// dish, phone screen, crate silhouette, eye — echoing that slide's beat.
+// All fillRect, each capped at 40x24, drawn centered at (cx, topY).
+const INTRO_VIGNETTES = ['dish', 'phone', 'crate', 'eye'];
+
+function drawIntroVignette(kind, cx, topY) {
+  if (kind === 'dish') {
+    px(cx-1,  topY+14, 2,  8, P.GRY);   // pole
+    px(cx-12, topY+2,  24, 3, P.LGRY);  // dish rim
+    px(cx-9,  topY+5,  18, 3, P.GRY);
+    px(cx-6,  topY+8,  12, 3, P.GRY);
+    px(cx-3,  topY+11, 6,  3, P.DGRY);  // dish throat
+    px(cx-7,  topY-3,  2,  2, P.TEL);   // signal blips
+    px(cx+3,  topY-6,  2,  2, P.LTEL);
+    px(cx+8,  topY-1,  2,  2, P.TEL);
+  } else if (kind === 'phone') {
+    px(cx-9, topY,    18, 22, P.DGRY);     // body
+    px(cx-7, topY+2,  14, 16, '#082830');  // screen
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 3; c++)
+        px(cx-5 + c*4, topY+4 + r*4, 2, 2, (r+c) % 2 === 0 ? P.TEL : P.LTEL); // pattern dots
+    px(cx-2, topY+20, 4, 1, P.GRY);        // home button
+  } else if (kind === 'crate') {
+    px(cx-14, topY+4,  28, 18, P.WOD);   // body
+    px(cx-14, topY+4,  28, 3,  P.TAN);   // top edge light
+    px(cx-14, topY+12, 28, 2,  P.DWOD);  // horizontal slat
+    px(cx-2,  topY+4,  2,  18, P.DWOD);  // vertical slat
+    px(cx-14, topY+4,  2,  18, P.DWOD);  // left edge shadow
+    px(cx+12, topY+4,  2,  18, P.DWOD);  // right edge shadow
+  } else if (kind === 'eye') {
+    px(cx-14, topY+9,  28, 8,  P.WHT);   // sclera
+    px(cx-14, topY+7,  28, 2,  P.DGRY);  // upper lid
+    px(cx-14, topY+17, 28, 2,  P.DGRY);  // lower lid
+    px(cx-5,  topY+7,  10, 12, P.TEL);   // iris
+    px(cx-2,  topY+10, 4,  6,  P.BLK);   // pupil
+    px(cx-3,  topY+9,  2,  2,  P.WHT);   // glint
+  }
+}
+
 function updateIntro() {
   intro.timer++;
   if (justPressed['KeyZ'] || justPressed['Space'] || intro.timer > 300) {
@@ -2298,11 +2543,13 @@ function drawIntro() {
   const slide = INTRO_SLIDES[intro.slide];
   if (!slide) return;
 
+  drawIntroVignette(INTRO_VIGNETTES[intro.slide], GW/2, 14);
+
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
-  let y = 22;
+  let y = 44;
 
   if (slide.location) {
     ctx.fillStyle = P.YEL;
@@ -2516,13 +2763,21 @@ function drawTitle() {
   drawText('ARROW KEYS: MOVE     Z: INTERACT', 30, hintY, P.DGRY, 5);
   drawText('X: SKIP     EXPLORE EVERYTHING', 34, hintY+10, P.DGRY, 5);
 
+  // M6-T4: release version string
+  drawText('v1.0 — CHAPTER ONE', 80, 216, P.GRY, 5);
+
   // NES copyright style
-  drawText('© BECK HAWTHORNE: ORIGIN  2024', 30, 225, '#303030', 5);
+  drawText('© BECK HAWTHORNE: ORIGIN  2026', 30, 226, '#303030', 5);
 }
 
 // ============================================================
 // ENDING SCREEN
 // ============================================================
+// M5-T2: the ending is a 3-stage ceremony — narrative (ENDING) ->
+// mission-report card (ENDING_REPORT) -> Chapter Two teaser
+// (ENDING_TEASER) -> stepped fade back to TITLE with the save cleared.
+const PSYCH_PROFILE = { pushback:'DIRECT', maybe:'GUARDED', silent:'SILENT' };
+
 function drawEnding() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, GW, GH);
@@ -2564,18 +2819,87 @@ function drawEnding() {
     drawText(l, 30, 56 + i * 13, P.WHT, 6);
   });
 
-  px(20, 145, GW-40, 1, P.DGRY);
-  drawText('Three days later:', 30, 160, P.GRY, 5);
-  drawText('She calls the number.', 30, 172, P.TEL, 6);
-  drawText('Two days after that:', 30, 186, P.GRY, 5);
-  drawText('Her grandfather says yes.', 30, 198, P.WHT, 6);
+  px(20, 138, GW-40, 1, P.DGRY);
+  drawText('Three days later:', 30, 152, P.GRY, 5);
+  drawText('She calls the number.', 30, 163, P.TEL, 6);
+  drawText('Two days after that:', 30, 176, P.GRY, 5);
+  drawText('Her grandfather says yes.', 30, 187, P.WHT, 6);
 
-  px(20, 208, GW-40, 1, P.DGRY);
+  px(20, 196, GW-40, 1, P.DGRY);
+
+  // M5-T1: choice echo — if Beck deflected with Indy earlier, Indy isn't
+  // fooled and texts her during the ending instead of Kane calling it out.
+  if (game.choices.indy === 'deflect') {
+    drawText('Her phone buzzes. INDY:', 30, 207, P.GRY, 5);
+    drawText('"you\'re still a bad liar. call me."', 30, 217, P.PNK, 5);
+  }
+
   if (Math.floor(game.frame/30)%2===0)
-    drawText('CHAPTER TWO: TEAM — COMING SOON', 18, 226, P.YEL, 5);
+    drawText('[Z] CONTINUE', 92, 226, P.YEL, 5);
 
   if (justPressed['KeyZ'])
-    restartGame();
+    transition.start('fade', () => { game.state = 'ENDING_REPORT'; });
+}
+
+function drawEndingReport() {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  px(10, 10, GW-20, GH-20, '#080818');
+  px(10, 10, GW-20, 2, P.TEL);
+  px(10, GH-12, GW-20, 2, P.TEL);
+
+  drawText('MISSION REPORT', 58, 32, P.TEL, 6);
+  px(20, 37, GW-40, 1, P.DGRY);
+
+  const ev = game.evidenceFound.length;
+  drawText('EVIDENCE COLLECTED', 30, 62, P.LGRY, 5);
+  drawText(`${ev}/4`, 30, 76, ev >= 4 ? P.YEL : P.WHT, 8);
+
+  drawText('HEARTS REMAINING', 30, 102, P.LGRY, 5);
+  for (let i = 0; i < pl.maxHearts; i++) {
+    const hx = 30 + i * 12, hy = 110;
+    px(hx, hy, 8, 7, i < pl.hearts ? P.RED : P.DGRY);
+    px(hx+2, hy-1, 2, 1, i < pl.hearts ? P.LRED : '#404040');
+    px(hx+5, hy-1, 2, 1, i < pl.hearts ? P.LRED : '#404040');
+  }
+
+  drawText('PSYCH PROFILE', 30, 140, P.LGRY, 5);
+  const finalChoice = game.choices['final'] || 'silent';
+  const profile = PSYCH_PROFILE[finalChoice] || 'SILENT';
+  drawText(`[ ${profile} ]`, 30, 154, P.YEL, 7);
+
+  px(20, 174, GW-40, 1, P.DGRY);
+  drawText('Chapter One: complete.', 30, 190, P.WHT, 6);
+
+  if (Math.floor(game.frame/30)%2===0)
+    drawText('[Z] CONTINUE', 92, 226, P.YEL, 5);
+
+  if (justPressed['KeyZ'])
+    transition.start('fade', () => { game.state = 'ENDING_TEASER'; });
+}
+
+function drawEndingTeaser() {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.YEL;
+  ctx.font = '9px monospace';
+  ctx.fillText('CHAPTER TWO: TEAM', GW/2, GH/2 - 6);
+  ctx.fillStyle = P.LGRY;
+  ctx.font = '6px monospace';
+  ctx.fillText('COMING SOON', GW/2, GH/2 + 10);
+  ctx.restore();
+
+  if (Math.floor(game.frame/30)%2===0)
+    drawText('[Z] RETURN TO TITLE', 66, GH-16, P.GRY, 5);
+
+  if (justPressed['KeyZ']) {
+    clearSave();
+    transition.start('fade', () => restartGame());
+  }
 }
 
 // ============================================================
@@ -2683,6 +3007,7 @@ function loop() {
     case 'EXPLORE':
       updatePlayer();
       updateGuards();
+      updateWanderers();
       updateShadowTeach();
       checkInteract();
       checkCafeArrow();
@@ -2698,6 +3023,8 @@ function loop() {
       updatePause();
       break;
     case 'ENDING':
+    case 'ENDING_REPORT':
+    case 'ENDING_TEASER':
       break;
     }
   }
@@ -2716,6 +3043,10 @@ function loop() {
     drawChapterCard();
   } else if (game.state === 'ENDING') {
     drawEnding();
+  } else if (game.state === 'ENDING_REPORT') {
+    drawEndingReport();
+  } else if (game.state === 'ENDING_TEASER') {
+    drawEndingTeaser();
   } else {
     // 4-frame camera shake on damage: offset cam for this draw only,
     // then restore so collision/updateCam math next frame is unaffected.
@@ -2772,6 +3103,11 @@ if (_initSettings && typeof _initSettings.muted === 'boolean') {
   AU.muted = _initSettings.muted;
 } else if (_initSave && typeof _initSave.muted === 'boolean') {
   AU.muted = _initSave.muted; // saves written before the settings key existed
+}
+if (_initSettings && TEXT_SPEED_ORDER.includes(_initSettings.textSpeed)) {
+  game.textSpeed = _initSettings.textSpeed;
+} else if (_initSave && TEXT_SPEED_ORDER.includes(_initSave.textSpeed)) {
+  game.textSpeed = _initSave.textSpeed; // pre-settings-key saves
 }
 restartGame();
 game.state = 'TITLE';
