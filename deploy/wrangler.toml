@@ -15,3 +15,5 @@ routes = [
 
 [assets]
 directory = "./public"
+
+# deploy: trigger 1
