@@ -391,6 +391,52 @@ async function main() {
   await page.keyboard.press('KeyM'); // restore
   await waitFrames(page, 2);
 
+  console.log('Checking title-screen KeyM leaves the progress save intact...');
+  // Plant a mid-game save, reload to the title, toggle mute there, then
+  // verify the save was not overwritten with blank new-game state.
+  await page.evaluate(() => {
+    localStorage.setItem('beck_save_v1', JSON.stringify({
+      v: 1, mapId: 'dock',
+      evidenceFound: ['evidence_manifest', 'evidence_crates'],
+      choices: { first: 'dock_first' }, hearts: 2,
+    }));
+  });
+  await page.reload();
+  await waitFrames(page, 10);
+  await page.keyboard.press('KeyM');
+  await waitFrames(page, 5);
+  const saveAfterTitleMute = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('beck_save_v1'))
+  );
+  if (saveAfterTitleMute.mapId !== 'dock' || saveAfterTitleMute.evidenceFound.length !== 2) {
+    throw new Error(`Title-screen KeyM corrupted the save: ${JSON.stringify(saveAfterTitleMute)}`);
+  }
+  await page.keyboard.press('KeyM'); // restore mute setting
+
+  console.log('Checking CONTINUE derives a fresh objective for the saved scene...');
+  await page.keyboard.press('KeyZ'); // CONTINUE (idx 0)
+  await page.waitForFunction(() => game.state === 'EXPLORE', null, { timeout: 5000 });
+  const contObjective = await page.evaluate(
+    () => ({ mapId: game.mapId, objective: game.objective })
+  );
+  if (contObjective.mapId !== 'dock' || contObjective.objective !== 'Search the dock for evidence.') {
+    throw new Error(`Stale objective after CONTINUE: ${JSON.stringify(contObjective)}`);
+  }
+
+  console.log('Checking the music scheduler skips ahead after a stale clock (hidden tab)...');
+  const burstNotes = await page.evaluate(() => {
+    let scheduled = 0;
+    const orig = AU.tone;
+    AU.tone = () => { scheduled++; };
+    AU.leadState.nextTime = AU.ctx.currentTime - 30; // like 30s in a background tab
+    AU.updateMusic();
+    AU.tone = orig;
+    return scheduled;
+  });
+  if (burstNotes > 4) {
+    throw new Error(`Music scheduler queued a ${burstNotes}-note catch-up burst after a stale clock`);
+  }
+
   await browser.close();
 
   if (errors.length) {

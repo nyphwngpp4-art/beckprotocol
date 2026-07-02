@@ -267,7 +267,10 @@ const AU = {
   toggleMute() {
     this.muted = !this.muted;
     if (this.masterGain) this.masterGain.gain.value = this.muted ? 0 : 1;
-    saveGame();
+    // Settings live under their own key: saveGame() here would overwrite
+    // the progress save with whatever state the player is paused in
+    // (on the title screen, that's a blank new game).
+    saveSettings();
   },
 
   // Single envelope'd note. type: 'square' | 'triangle' | 'noise'.
@@ -352,6 +355,12 @@ const AU = {
 
   stepChannel(table, state, type, spu, peak) {
     const LOOKAHEAD = 0.15;
+    // The AudioContext clock keeps running while rAF is paused (hidden
+    // tab). If we fell behind, skip ahead instead of scheduling every
+    // missed note in the past — they'd all play at once on refocus.
+    if (state.nextTime < this.ctx.currentTime) {
+      state.nextTime = this.ctx.currentTime + 0.05;
+    }
     while (state.nextTime < this.ctx.currentTime + LOOKAHEAD) {
       const [note, len] = table[state.idx % table.length];
       const dur = len * spu;
@@ -499,7 +508,8 @@ function updateCam() {
 // ============================================================
 // SAVE SYSTEM
 // ============================================================
-const SAVE_KEY = 'beck_save_v1';
+const SAVE_KEY     = 'beck_save_v1';
+const SETTINGS_KEY = 'beck_settings_v1';
 
 function saveGame() {
   try {
@@ -509,9 +519,22 @@ function saveGame() {
       evidenceFound: game.evidenceFound,
       choices: game.choices,
       hearts: pl.hearts,
-      muted: AU.muted,
     }));
   } catch (e) { /* localStorage unavailable (e.g. file:// context) */ }
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ muted: AU.muted }));
+  } catch (e) { /* ignore */ }
+}
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function loadSave() {
@@ -1667,10 +1690,14 @@ function checkGuardCollision(g) {
     showDamageFlash();
     AU.sfx('hurt');
     if (pl.hearts <= 0) {
+      // Getting caught during the stealth phase has a different goal
+      // than getting caught during the finale escape.
       startDialogue([
         {speaker:'', text:'CAUGHT! A guard grabbed you.'},
         {speaker:'', text:'Evidence still secured. You break free and run.'},
-        {speaker:'', text:'Try again — reach the EXIT at the top of the dock!'},
+        game.dockChaseActive
+          ? {speaker:'', text:'Try again — reach the EXIT at the top of the dock!'}
+          : {speaker:'', text:'Shake them off and keep searching for evidence. Stay out of the flashlight beams.'},
       ], resetDockFinaleEncounter);
     }
   }
@@ -2359,13 +2386,18 @@ function drawChapterCard() {
 // ============================================================
 const titleMenu = { idx: 0, confirmNewGame: false };
 
+// Read once per visit to the title screen (refreshed in restartGame),
+// not every frame — loadSave() is a synchronous localStorage read +
+// JSON.parse, and update + draw would each do it 60x/second.
+let titleSave = null;
+
 function startNewGame() {
   restartGame();
   game.state = 'INTRO';
 }
 
 function updateTitle() {
-  const save = loadSave();
+  const save = titleSave;
 
   if (!save) {
     if (justPressed['KeyZ'] || justPressed['KeyX'] || justPressed['Space']) { AU.sfx('confirm'); startNewGame(); }
@@ -2460,7 +2492,7 @@ function drawTitle() {
   drawText('PROJECT  ARGUS', 52, 116, P.YEL, 6);
   drawText('CHAPTER ONE:  PATTERN', 54, 126, P.GRY, 5);
 
-  const save = loadSave();
+  const save = titleSave;
   let hintY = 185;
 
   if (!save) {
@@ -2567,12 +2599,27 @@ function loadScene(mapId, heal = true) {
   AU.music(MUSIC_FOR_MAP[mapId] || mapId);
 }
 
+// The objective isn't stored in the save; it's derived from where the
+// player is and what they've found, so CONTINUE never shows a stale goal.
+function objectiveForScene(mapId) {
+  if (mapId === 'bedroom') return 'Solve the Pattern Lock puzzle on your computer.';
+  if (mapId === 'dock') {
+    return EVIDENCE_IDS.every(id => game.evidenceFound.includes(id))
+      ? 'Get out — reach the EXIT.'
+      : 'Search the dock for evidence.';
+  }
+  if (mapId === 'school')    return 'Find Indy at school.';
+  if (mapId === 'cafeteria') return 'Talk to the two visitors at your lunch table.';
+  return 'Explore.';
+}
+
 function continueGame(save) {
   game.evidenceFound = Array.isArray(save.evidenceFound) ? save.evidenceFound.slice() : [];
   game.choices        = (save.choices && typeof save.choices === 'object') ? save.choices : {};
   pl.hearts = (typeof save.hearts === 'number')
     ? Math.max(0, Math.min(pl.maxHearts, save.hearts))
     : pl.maxHearts;
+  setObjective(objectiveForScene(save.mapId), true);
   loadScene(save.mapId, false);
 }
 
@@ -2582,10 +2629,11 @@ function restartGame() {
     evidenceFound:[], choices:{}, dockChaseActive:false, pausedFrom:null,
     shadowTaught:false,
   });
-  setObjective('Solve the Pattern Lock puzzle on your computer.', true);
+  setObjective(objectiveForScene('bedroom'), true);
   intro.slide = 0; intro.timer = 0;
   Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
   Object.assign(titleMenu, {idx:0, confirmNewGame:false});
+  titleSave = loadSave(); // every path to the TITLE state goes through here
   resetDockGuards();
   game.frame = 0;
   AU.music('title');
@@ -2718,8 +2766,13 @@ function loop() {
 // ============================================================
 // INIT
 // ============================================================
-const _initSave = loadSave();
-if (_initSave && typeof _initSave.muted === 'boolean') AU.muted = _initSave.muted;
+const _initSettings = loadSettings();
+const _initSave     = loadSave();
+if (_initSettings && typeof _initSettings.muted === 'boolean') {
+  AU.muted = _initSettings.muted;
+} else if (_initSave && typeof _initSave.muted === 'boolean') {
+  AU.muted = _initSave.muted; // saves written before the settings key existed
+}
 restartGame();
 game.state = 'TITLE';
 requestAnimationFrame(loop);
