@@ -151,7 +151,22 @@ dock: {
   ],
   npcs:[
     {x:15*TW, y:12*TH, id:'smuggler', col:P.RED, w:14, h:14,
-     dir:'down', speed:0.85, active:false, cooldown:0},
+     dir:'down', active:false, cooldown:0,
+     guard:true, patrol:false, waypoints:[], wpIdx:0,
+     state:'CALM', susTimer:0, sightTimer:0, alertSpeed:0.95},
+    // Patrol guards — waypoint loops, walk speed 0.6 (M3-T1).
+    {x:3*TW, y:1*TH, id:'guard1', col:P.GRY, w:14, h:14, dir:'right',
+     active:true, cooldown:0, guard:true, patrol:true,
+     waypoints:[{x:3*TW,y:1*TH},{x:18*TW,y:1*TH}], wpIdx:1,
+     state:'CALM', susTimer:0, sightTimer:0, patrolSpeed:0.6, alertSpeed:0.95},
+    {x:2*TW, y:7*TH, id:'guard2', col:P.GRY, w:14, h:14, dir:'right',
+     active:true, cooldown:0, guard:true, patrol:true,
+     waypoints:[{x:2*TW,y:7*TH},{x:19*TW,y:7*TH}], wpIdx:1,
+     state:'CALM', susTimer:0, sightTimer:0, patrolSpeed:0.6, alertSpeed:0.95},
+    {x:5*TW, y:13*TH, id:'guard3', col:P.GRY, w:14, h:14, dir:'right',
+     active:true, cooldown:0, guard:true, patrol:true,
+     waypoints:[{x:5*TW,y:13*TH},{x:19*TW,y:13*TH}], wpIdx:1,
+     state:'CALM', susTimer:0, sightTimer:0, patrolSpeed:0.6, alertSpeed:0.95},
   ],
 },
 
@@ -443,7 +458,9 @@ if ('ontouchstart' in window) setupTouch();
 // ============================================================
 const game = {
   state: 'TITLE',      // TITLE, CUTSCENE, EXPLORE, MINIGAME_PUZZLE,
-                       // DOCK_CHASE, DIALOGUE, ENDING, PAUSED
+                       // DIALOGUE, ENDING, PAUSED
+                       // (the dock finale runs inside EXPLORE, gated by
+                       // game.dockChaseActive — see M3-T4)
   frame: 0,
   mapId: 'bedroom',
   evidenceFound: [],   // filled with item ids
@@ -454,6 +471,7 @@ const game = {
   pausedFrom: null,    // state to return to when PAUSED is closed
   objective: '',
   objectiveBannerTimer: 0,
+  shadowTaught: false, // M3-T3: has the "Shadows hide you." toast fired yet?
 };
 
 // Player
@@ -601,6 +619,27 @@ function drawObjectiveBanner() {
   game.objectiveBannerTimer--;
 }
 
+// One-line toast (e.g. "Shadows hide you.") — a fixed box low on
+// screen, distinct from the top-sliding objective banner.
+const TOAST_FRAMES = 150; // 2.5s
+const toast = { text: '', timer: 0 };
+
+function showToast(text) {
+  toast.text = text;
+  toast.timer = TOAST_FRAMES;
+}
+
+function drawToast() {
+  if (toast.timer <= 0) return;
+  const tw2 = toast.text.length * 6 + 10;
+  const bx2 = Math.floor(GW/2 - tw2/2);
+  const by2 = GH - 34;
+  px(bx2, by2, tw2, 12, P.BLK);
+  px(bx2, by2+10, tw2, 2, P.TEL);
+  drawText(toast.text, bx2+5, by2+9, P.TEL, 6);
+  toast.timer--;
+}
+
 // ============================================================
 // DIALOGUE SYSTEM
 // ============================================================
@@ -679,7 +718,7 @@ function advanceDialogue() {
   if (dlg.idx >= dlg.lines.length) {
     dlg.active  = false;
     dlg.choices = null;
-    game.state  = game.dockChaseActive ? 'DOCK_CHASE' : 'EXPLORE';
+    game.state  = 'EXPLORE';
     if (dlg.onDone) dlg.onDone();
     return;
   }
@@ -929,7 +968,7 @@ const NPC_HAIR = {
 // dialogue-portrait renderer.
 function drawNPCHead(sx, sy, npc) {
   function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
-  const [hA, hB] = NPC_HAIR[npc.id] || ['#3C2400','#5C3800'];
+  const [hA, hB] = NPC_HAIR[npc.id] || (npc.guard ? ['#1C1C1C','#000000'] : ['#3C2400','#5C3800']);
   const col = npc.col;
 
   // Hair
@@ -961,13 +1000,14 @@ function drawNPCChar(sx, sy, npc, fr) {
 
   // Body/suit colour
   const bodyCol = (id==='indy') ? '#E84898' : (id==='sterling') ? '#2858A0'
-                : (id==='kane')  ? '#505050'  : '#800000';
+                : (id==='kane')  ? '#505050'  : (npc.patrol) ? '#282828' : '#800000';
 
   drawNPCHead(sx, sy, npc);
 
   // Body
   r(3,13, 8,8, bodyCol);
   r(6,13, 2,8, '#00000030');  // seam
+  if (npc.patrol) r(3,18, 8,2, P.YEL); // flashlight-yellow belt trim
 
   // Arms
   const aO = fr ? 1 : 0;
@@ -990,7 +1030,10 @@ function drawPlayer() {
   const sy = pl.y - cam.y - 14;  // feet align at sy+27 ≈ pl.y+pl.h
   // Ground shadow at foot level
   px(sx+2, pl.y - cam.y + pl.h, 11, 2, 'rgba(0,0,0,0.35)');
+  const hidden = playerInShadow();
+  if (hidden) ctx.globalAlpha = 0.6;
   drawBeck(sx, sy, pl.dir, pl.frame);
+  if (hidden) ctx.globalAlpha = 1;
   if (heartRestoreTimer > 0) {
     if (Math.floor(heartRestoreTimer/4) % 2 === 0)
       drawText('+', sx+4, sy-2, '#30E060', 8);
@@ -1010,9 +1053,13 @@ function drawNPC(npc) {
     return;
   }
 
+  if (npc.guard) drawGuardCone(npc);
+
   const fr = Math.floor(game.frame/15) % 2;
   px(sx+2, npc.y - cam.y + npc.h, 11, 2, 'rgba(0,0,0,0.3)');
   drawNPCChar(sx, sy, npc, fr);
+
+  if (npc.guard) drawGuardStateIcon(npc, sx, sy);
 
   // Name tag
   const labels = {indy:'INDY', sterling:'STERLING', kane:'KANE'};
@@ -1056,10 +1103,11 @@ function drawMap() {
       } else if (id === 2) { // bed
         px(sx+1, sy+1, 14, 6, '#9060C0'); // pillow
         px(sx+1, sy+7, 14, 8, '#5030A0'); // sheet
-      } else if (id === 12) { // exit zone
-        const glowF = Math.floor(game.frame/15)%2;
+      } else if (id === 12) { // exit zone — flashes faster once the finale is live
+        const rate = game.dockChaseActive ? 6 : 15;
+        const glowF = Math.floor(game.frame/rate)%2;
         px(sx, sy, TW, TH, glowF ? '#30A840' : '#206830');
-        drawText('EXIT', sx+1, sy+10, P.YEL, 5);
+        drawText('EXIT', sx+1, sy+10, game.dockChaseActive ? P.WHT : P.YEL, 5);
       } else if (id === 16) { // evidence crate
         px(sx+1, sy+1, 14, 14, '#2C4830');
         px(sx+3, sy+3, 10, 10, '#1C3820');
@@ -1174,7 +1222,7 @@ function rectSolid(x, y, w, h) {
 // PLAYER MOVEMENT
 // ============================================================
 function updatePlayer() {
-  if (game.state !== 'EXPLORE' && game.state !== 'DOCK_CHASE') return;
+  if (game.state !== 'EXPLORE') return;
 
   let dx = 0, dy = 0;
   if (keys['ArrowLeft'] || keys['KeyA'])  dx = -pl.speed;
@@ -1236,7 +1284,7 @@ function checkInteract() {
 
   // Check NPCs
   for (const npc of map.npcs) {
-    if (!npc.active || npc.id === 'smuggler' || npc.id === 'cafe_arrow') continue;
+    if (!npc.active || npc.guard || npc.id === 'cafe_arrow') continue;
     const nx = npc.x + 6;
     const ny = npc.y + 7;
     if (Math.abs(cx - nx) < TW * 2 && Math.abs(cy - ny) < TH * 2) {
@@ -1298,10 +1346,10 @@ function handleItem(item) {
     startDialogue(allFound ? [
       ...lines,
       {speaker:'BECK', col:P.TEL, text:"That's everything. Four pieces of evidence. Time to get out."},
-      {speaker:'', text:'The smugglers haven\'t spotted you yet. Reach the EXIT at the top of the dock.'},
+      {speaker:'', text:'An alarm trips somewhere. Every guard on the dock is coming for you now.'},
       {speaker:'', text:'GET OUT NOW — reach the glowing EXIT at the top of the map!'},
     ] : lines, () => {
-      if (allFound) triggerDockChase();
+      if (allFound) triggerDockFinale();
     });
     return;
   }
@@ -1518,78 +1566,225 @@ function drawPause() {
 }
 
 // ============================================================
-// DOCK CHASE
+// GUARD AI — patrol, vision cones, CALM/SUSPICIOUS/ALERT (M3-T1, M3-T2)
 // ============================================================
-function triggerDockChase() {
-  game.dockChaseActive = true;
-  const smuggler = MAPS['dock'].npcs[0];
-  smuggler.active  = true;
-  smuggler.x       = 15 * TW;
-  smuggler.y       = 5  * TH;
-  game.state       = 'DOCK_CHASE';
-  AU.music('chase');
+const CONE_RANGE       = 56;
+const CONE_HALF_ANGLE  = 35 * Math.PI / 180;
+const SUSPICIOUS_FRAMES = 45;  // 0.75s @ 60fps
+const LOSE_SIGHT_FRAMES = 180; // 3s @ 60fps
+const GUARD_FACING_ANGLE = {down: Math.PI/2, up: -Math.PI/2, left: Math.PI, right: 0};
+
+function patrolGuard(g) {
+  const target = g.waypoints[g.wpIdx];
+  const dx = target.x - g.x, dy = target.y - g.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 2) {
+    g.wpIdx = (g.wpIdx + 1) % g.waypoints.length;
+    return;
+  }
+  g.x += (dx / dist) * g.patrolSpeed;
+  g.y += (dy / dist) * g.patrolSpeed;
+  g.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
 }
 
-function updateDockChase() {
-  if (!game.dockChaseActive) return;
+function faceTowardPlayer(g) {
+  const dx = (pl.x + pl.w/2) - (g.x + g.w/2);
+  const dy = (pl.y + pl.h/2) - (g.y + g.h/2);
+  g.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
 
-  const map  = MAPS['dock'];
-  const smug = map.npcs[0];
-  if (!smug || !smug.active) return;
+function pursuePlayer(g, speed) {
+  const dx = (pl.x + pl.w/2) - (g.x + g.w/2);
+  const dy = (pl.y + pl.h/2) - (g.y + g.h/2);
+  const dist = Math.hypot(dx, dy);
+  if (dist <= 4) return;
+  const nx = g.x + (dx/dist) * speed, ny = g.y + (dy/dist) * speed;
+  const m = 2;
+  if (!rectSolid(nx + m, g.y + m, g.w - m*2, g.h - m*2)) g.x = nx;
+  if (!rectSolid(g.x + m, ny + m, g.w - m*2, g.h - m*2)) g.y = ny;
+  g.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
 
-  // Move smuggler toward player
-  const dx = (pl.x + pl.w/2) - (smug.x + 7);
-  const dy = (pl.y + pl.h/2) - (smug.y + 7);
-  const dist = Math.sqrt(dx*dx + dy*dy);
+// Facing cone + step-every-4px line of sight; blocked by any solid tile.
+// Standing on a shadow tile (SH) hides Beck from every guard's cone.
+function playerInShadow() {
+  const map = MAPS[game.mapId];
+  const tx = Math.floor((pl.x + pl.w/2) / TW);
+  const ty = Math.floor((pl.y + pl.h/2) / TH);
+  const row = map.rows[ty];
+  return !!row && row[tx] === SH;
+}
 
-  if (dist > 4) {
-    const nx = smug.x + (dx/dist) * smug.speed;
-    const ny = smug.y + (dy/dist) * smug.speed;
-    const m  = 2;
-    if (!rectSolid(nx+m, smug.y+m, smug.w-m*2, smug.h-m*2)) smug.x = nx;
-    if (!rectSolid(smug.x+m, ny+m, smug.w-m*2, smug.h-m*2)) smug.y = ny;
-    smug.dir = Math.abs(dx) > Math.abs(dy) ? (dx>0?'right':'left') : (dy>0?'down':'up');
+let wasInShadow = false;
+function updateShadowTeach() {
+  const inShadow = playerInShadow();
+  if (inShadow && !wasInShadow && !game.shadowTaught) {
+    game.shadowTaught = true;
+    showToast('Shadows hide you.');
   }
+  wasInShadow = inShadow;
+}
 
-  if (smug.cooldown > 0) { smug.cooldown--; return; }
+function guardSeesPlayer(g) {
+  if (playerInShadow()) return false;
+  const gx = g.x + g.w/2, gy = g.y + g.h/2;
+  const tx = pl.x + pl.w/2, ty = pl.y + pl.h/2;
+  const dx = tx - gx, dy = ty - gy;
+  const dist = Math.hypot(dx, dy);
+  if (dist > CONE_RANGE) return false;
 
-  // Collision with player
-  if (
-    Math.abs((pl.x+pl.w/2) - (smug.x+7)) < 12 &&
-    Math.abs((pl.y+pl.h/2) - (smug.y+7)) < 12 &&
-    pl.invincible === 0
-  ) {
+  const facing = GUARD_FACING_ANGLE[g.dir] || 0;
+  let diff = Math.atan2(dy, dx) - facing;
+  diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // wrap to [-PI, PI]
+  if (Math.abs(diff) > CONE_HALF_ANGLE) return false;
+
+  const steps = Math.max(1, Math.ceil(dist / 4));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (tileSolid(Math.floor((gx + dx*t) / TW), Math.floor((gy + dy*t) / TH))) return false;
+  }
+  return true;
+}
+
+function returnGuardToPatrol(g) {
+  g.state = 'CALM';
+  if (!g.patrol) return;
+  let nearest = 0, best = Infinity;
+  g.waypoints.forEach((wp, i) => {
+    const d = Math.hypot(wp.x - g.x, wp.y - g.y);
+    if (d < best) { best = d; nearest = i; }
+  });
+  g.wpIdx = nearest;
+}
+
+function checkGuardCollision(g) {
+  if (g.cooldown > 0 || pl.invincible > 0) return;
+  const gx = g.x + g.w/2, gy = g.y + g.h/2;
+  if (Math.abs((pl.x+pl.w/2) - gx) < 12 && Math.abs((pl.y+pl.h/2) - gy) < 12) {
     pl.hearts--;
     pl.invincible = 80;
-    smug.cooldown = 60;
+    g.cooldown = 60;
     showDamageFlash();
     AU.sfx('hurt');
     if (pl.hearts <= 0) {
       startDialogue([
-        {speaker:'', text:'CAUGHT! The smuggler grabbed you.'},
-        {speaker:'', text:'Evidence still secured. You manage to break free and run.'},
+        {speaker:'', text:'CAUGHT! A guard grabbed you.'},
+        {speaker:'', text:'Evidence still secured. You break free and run.'},
         {speaker:'', text:'Try again — reach the EXIT at the top of the dock!'},
-      ], () => {
-        pl.hearts    = 3;
-        pl.x         = MAPS['dock'].playerSpawn.x;
-        pl.y         = MAPS['dock'].playerSpawn.y;
-        smug.x       = 15*TW;
-        smug.y       = 5*TH;
-        smug.cooldown= 0;
-        pl.invincible= 120;
-        game.state   = 'DOCK_CHASE';
-      });
+      ], resetDockFinaleEncounter);
     }
-    return;
   }
+}
 
-  // Player reached exit
+function updateGuards() {
+  if (game.mapId !== 'dock') return;
+  const map = MAPS['dock'];
+
+  map.npcs.forEach(g => {
+    if (!g.guard || !g.active) return;
+    if (g.cooldown > 0) g.cooldown--;
+
+    // M3-T4: once the finale is live every guard (including the
+    // smuggler, guard #4) is permanently ALERT — no cone/timeout logic.
+    if (game.dockChaseActive) {
+      g.state = 'ALERT';
+      pursuePlayer(g, g.alertSpeed);
+      checkGuardCollision(g);
+      return;
+    }
+
+    if (!g.patrol) return; // smuggler (guard #4) stays dormant until the finale
+
+    if (g.state === 'CALM') {
+      patrolGuard(g);
+      if (guardSeesPlayer(g)) { g.state = 'SUSPICIOUS'; g.susTimer = SUSPICIOUS_FRAMES; }
+    } else if (g.state === 'SUSPICIOUS') {
+      faceTowardPlayer(g);
+      if (guardSeesPlayer(g)) {
+        g.susTimer--;
+        if (g.susTimer <= 0) {
+          g.state = 'ALERT';
+          g.sightTimer = LOSE_SIGHT_FRAMES;
+          AU.sfx('alert');
+          AU.music('chase');
+        }
+      } else {
+        g.state = 'CALM';
+      }
+    } else if (g.state === 'ALERT') {
+      pursuePlayer(g, g.alertSpeed);
+      checkGuardCollision(g);
+      if (guardSeesPlayer(g)) g.sightTimer = LOSE_SIGHT_FRAMES; else g.sightTimer--;
+      if (g.sightTimer <= 0) {
+        returnGuardToPatrol(g);
+        const stillAlert = map.npcs.some(o => o.guard && o.active && o.state === 'ALERT');
+        if (!stillAlert) AU.music('dock');
+      }
+    }
+  });
+
+  checkDockExit();
+}
+
+// Translucent stepped-alpha yellow triangle of small rects — no ctx paths.
+// Hidden once a guard is ALERT (it's beelining for the player, not scanning).
+function drawGuardCone(g) {
+  if (g.state === 'ALERT') return;
+  const gx = g.x - cam.x + g.w/2, gy = g.y - cam.y + g.h/2;
+  const facing = GUARD_FACING_ANGLE[g.dir] || 0;
+  for (let i = 0; i <= 8; i++) {
+    const a = facing - CONE_HALF_ANGLE + (2 * CONE_HALF_ANGLE) * (i / 8);
+    const cos = Math.cos(a), sin = Math.sin(a);
+    for (let d = 8; d <= CONE_RANGE; d += 8) {
+      const alpha = d < CONE_RANGE/3 ? 0.28 : d < CONE_RANGE*2/3 ? 0.16 : 0.08;
+      ctx.fillStyle = `rgba(248,216,0,${alpha})`;
+      ctx.fillRect(Math.round(gx + cos*d) - 1, Math.round(gy + sin*d) - 1, 2, 2);
+    }
+  }
+}
+
+// Blinking '?' (SUSPICIOUS) / '!' (ALERT) above a guard's head.
+function drawGuardStateIcon(g, sx, sy) {
+  if (g.state === 'CALM' || Math.floor(game.frame/10) % 2 === 0) return;
+  const icon = g.state === 'SUSPICIOUS' ? '?' : '!';
+  const col2 = g.state === 'SUSPICIOUS' ? P.YEL : P.RED;
+  px(sx+4, sy-9, 7, 8, P.BLK);
+  drawText(icon, sx+6, sy-3, col2, 7);
+}
+
+// ============================================================
+// DOCK FINALE (M3-T4) — every guard permanently ALERT, race the EXIT
+// ============================================================
+// Replaces the old single-smuggler DOCK_CHASE special case: the finale
+// now runs inside plain EXPLORE, gated by the game.dockChaseActive flag,
+// and reuses the same guard state machine as the stealth phase.
+function triggerDockFinale() {
+  game.dockChaseActive = true;
+  MAPS['dock'].npcs.forEach(g => {
+    if (!g.guard) return;
+    g.active     = true;
+    g.state      = 'ALERT';
+    g.sightTimer = LOSE_SIGHT_FRAMES;
+  });
+  AU.music('chase');
+}
+
+function resetDockFinaleEncounter() {
+  pl.hearts     = 3;
+  pl.x          = MAPS['dock'].playerSpawn.x;
+  pl.y          = MAPS['dock'].playerSpawn.y;
+  pl.invincible = 120;
+  MAPS['dock'].npcs.forEach(g => { if (g.guard) g.cooldown = 0; });
+}
+
+function checkDockExit() {
+  if (!game.dockChaseActive) return;
   const exitTX = 8, exitTY = 0;
   const exitX  = exitTX * TW;
   const exitY  = exitTY * TH;
   if (pl.x + pl.w > exitX && pl.x < exitX + TW && pl.y < exitY + TH*2) {
-    game.dockChaseActive  = false;
-    smug.active           = false;
+    game.dockChaseActive = false;
+    MAPS['dock'].npcs.forEach(g => { if (g.guard) g.active = false; });
     AU.sfx('success');
     startDialogue([
       {speaker:'', text:'You hit the street at full speed.'},
@@ -1599,10 +1794,7 @@ function updateDockChase() {
       {speaker:'', text:'Nobody knows it was you.'},
       {speaker:'', text:'Two weeks pass. Then something strange happens at school...'},
     ], () => { setObjective('Find Indy at school.', true); transitionToScene('school'); });
-    return;
   }
-
-  updatePlayer(); // allow player movement during chase
 }
 
 let damageFlash = 0;
@@ -1723,7 +1915,7 @@ function drawInteractPrompt() {
   }
 
   for (const npc of map.npcs) {
-    if (!npc.active || npc.id === 'smuggler' || npc.id === 'cafe_arrow') continue;
+    if (!npc.active || npc.guard || npc.id === 'cafe_arrow') continue;
     const nx = npc.x + 6;
     const ny = npc.y + 7;
     if (Math.abs(cx-nx) < TW*2 && Math.abs(cy-ny) < TH*2) {
@@ -2362,6 +2554,7 @@ function loadScene(mapId, heal = true) {
   game.dockChaseActive = false;
   game.state          = 'EXPLORE';
   game.frame          = 0;
+  if (mapId === 'dock') resetDockGuards();
 
   const map = MAPS[mapId];
   pl.x     = map.playerSpawn.x;
@@ -2387,15 +2580,30 @@ function restartGame() {
   Object.assign(game, {
     state:'TITLE', frame:0, mapId:'bedroom',
     evidenceFound:[], choices:{}, dockChaseActive:false, pausedFrom:null,
+    shadowTaught:false,
   });
   setObjective('Solve the Pattern Lock puzzle on your computer.', true);
   intro.slide = 0; intro.timer = 0;
   Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
   Object.assign(titleMenu, {idx:0, confirmNewGame:false});
-  // Reset dock npcs
-  MAPS['dock'].npcs.forEach(n => { n.active=false; n.x=15*TW; n.y=5*TH; });
+  resetDockGuards();
   game.frame = 0;
   AU.music('title');
+}
+
+// Patrol guards return to their first waypoint, active and CALM; the
+// smuggler (guard #4) stays hidden until the M3-T4 dock finale.
+function resetDockGuards() {
+  MAPS['dock'].npcs.forEach(g => {
+    if (!g.guard) return;
+    if (g.patrol) {
+      g.x = g.waypoints[0].x; g.y = g.waypoints[0].y;
+      g.wpIdx = 1; g.active = true;
+    } else {
+      g.x = 15*TW; g.y = 12*TH; g.active = false;
+    }
+    g.state = 'CALM'; g.susTimer = 0; g.sightTimer = 0; g.cooldown = 0;
+  });
 }
 
 // ============================================================
@@ -2411,7 +2619,7 @@ function loop() {
   // Input is ignored entirely while a transition is playing.
   if (!transition.active) {
     if (justPressed['Enter']) {
-      if (game.state === 'EXPLORE' || game.state === 'DOCK_CHASE') openPause();
+      if (game.state === 'EXPLORE') openPause();
       else if (game.state === 'PAUSED') closePause();
     }
     switch (game.state) {
@@ -2426,6 +2634,8 @@ function loop() {
       break;
     case 'EXPLORE':
       updatePlayer();
+      updateGuards();
+      updateShadowTeach();
       checkInteract();
       checkCafeArrow();
       updateCam();
@@ -2435,12 +2645,6 @@ function loop() {
       break;
     case 'MINIGAME_PUZZLE':
       updatePuzzle();
-      break;
-    case 'DOCK_CHASE':
-      updatePlayer();
-      updateDockChase();
-      checkInteract();
-      updateCam();
       break;
     case 'PAUSED':
       updatePause();
@@ -2501,6 +2705,7 @@ function loop() {
   }
 
   drawObjectiveBanner();
+  drawToast();
   drawMuteGlyph();
   transition.draw();
 

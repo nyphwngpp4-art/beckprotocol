@@ -320,13 +320,65 @@ async function main() {
   await waitFrames(page, 14); // let the banner finish sliding in before the screenshot
   await shot(page, 'objective-banner-exit');
 
-  // Drain the resulting "all evidence found" dialogue (drops into DOCK_CHASE).
+  // Drain the resulting "all evidence found" dialogue, which fires
+  // triggerDockFinale() on completion.
   for (let i = 0; i < 30; i++) {
     const active = await page.evaluate(() => dlg.active);
     if (!active) break;
     await page.keyboard.press('KeyZ');
     await waitFrames(page, 3);
   }
+
+  console.log('Checking the M3-T4 dock finale went live (every guard ALERT)...');
+  const finaleState = await page.evaluate(() => ({
+    dockChaseActive: game.dockChaseActive,
+    guardStates: MAPS['dock'].npcs.filter(n => n.guard && n.active).map(n => n.state),
+  }));
+  if (!finaleState.dockChaseActive) {
+    throw new Error('Expected game.dockChaseActive === true after the 4th evidence');
+  }
+  if (!finaleState.guardStates.length || finaleState.guardStates.some(s => s !== 'ALERT')) {
+    throw new Error(`Expected every active guard ALERT at the finale, got ${JSON.stringify(finaleState.guardStates)}`);
+  }
+
+  console.log('M3-T4: full dock playthrough — escape through the guard gauntlet to school...');
+  // A real player would be on an open floor tile near the crate they just
+  // inspected, not centered on its solid hitbox (that placement above was
+  // only for the interact-range check) — reposition onto the open center
+  // corridor (cols 8-12) before driving movement.
+  await page.evaluate(() => { pl.x = 8 * TW; pl.y = 13 * TH; updateCam(); });
+  await waitFrames(page, 2);
+  await holdDirection(page, 'ArrowUp', 260); // climb the center lane toward the EXIT
+  await shot(page, 'dock-finale-escape');
+  await holdDirection(page, 'ArrowUp', 260);
+
+  let escaped = false;
+  for (let i = 0; i < 20; i++) {
+    const s = await page.evaluate(() => ({ state: game.state, dockChaseActive: game.dockChaseActive }));
+    if (!s.dockChaseActive) { escaped = true; break; }
+    await holdDirection(page, 'ArrowUp', 60);
+  }
+  if (!escaped) throw new Error('Player did not reach the dock EXIT within the movement budget');
+
+  const heartsAfterEscape = await page.evaluate(() => pl.hearts);
+  console.log(`  hearts remaining after the escape: ${heartsAfterEscape}/3`);
+
+  // Drain the "you hit the street" dialogue, then confirm the door-fade
+  // into school completes.
+  for (let i = 0; i < 20; i++) {
+    const active = await page.evaluate(() => dlg.active);
+    if (!active) break;
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
+  await page.waitForFunction(() => transition.active, null, { timeout: 5000 });
+  await page.waitForFunction(() => !transition.active, null, { timeout: 8000 });
+  await waitFrames(page, 3);
+  const postDockState = await page.evaluate(() => ({ state: game.state, mapId: game.mapId }));
+  if (postDockState.mapId !== 'school' || postDockState.state !== 'EXPLORE') {
+    throw new Error(`Expected school EXPLORE after the dock escape, got ${JSON.stringify(postDockState)}`);
+  }
+  await shot(page, 'dock-escape-to-school');
 
   console.log('Checking KeyM toggles mute...');
   const mutedBefore = await page.evaluate(() => AU.muted);
