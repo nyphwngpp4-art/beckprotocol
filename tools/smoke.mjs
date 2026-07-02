@@ -2,9 +2,11 @@
 // ============================================================
 // SMOKE TEST — beck_hawthorne_8bit.html
 // Drives the game with Playwright: title -> intro -> chapter
-// card -> EXPLORE, walks all four directions, opens the
-// bedroom computer puzzle. Fails (exit 1) on any console error
-// or a failed assertion. Screenshots each stage to tools/screens/.
+// card -> EXPLORE, walks all four directions, opens and solves
+// the bedroom computer puzzle, verifies save/reload/CONTINUE,
+// and captures the bedroom -> dock stepped-fade transition.
+// Fails (exit 1) on any console error or a failed assertion.
+// Screenshots each stage to tools/screens/.
 // ============================================================
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
@@ -85,9 +87,12 @@ async function main() {
   }
   await shot(page, 'chapter-card');
 
-  console.log('Chapter card -> bedroom (EXPLORE)...');
+  console.log('Chapter card -> bedroom (EXPLORE) via fade transition...');
   await page.keyboard.press('KeyZ');
-  await waitFrames(page, 10);
+  await page.waitForFunction(() => transition.active && transition.frame >= 10, null, { timeout: 5000 });
+  await shot(page, 'transition-mid-fade');
+  await page.waitForFunction(() => !transition.active, null, { timeout: 5000 });
+  await waitFrames(page, 3);
   const state = await page.evaluate(() => game.state);
   if (state !== 'EXPLORE') {
     throw new Error(`Expected game.state === 'EXPLORE', got '${state}'`);
@@ -136,6 +141,55 @@ async function main() {
     throw new Error(`CONTINUE did not restore bedroom EXPLORE state: ${JSON.stringify(continuedState)}`);
   }
   await shot(page, 'continue-bedroom');
+
+  console.log('Completing Pattern Lock to trigger the bedroom -> dock scene cut...');
+  await page.evaluate(() => { pl.x = 140; pl.y = 92; });
+  await waitFrames(page, 2);
+  await page.keyboard.press('KeyZ');
+  await waitFrames(page, 6);
+
+  // Phase 0 & 1 location puzzles: any answer, then advance.
+  for (let phase = 0; phase < 2; phase++) {
+    await page.keyboard.press('KeyZ'); // answer
+    await waitFrames(page, 5);
+    await page.keyboard.press('KeyZ'); // advance to next phase
+    await waitFrames(page, 5);
+  }
+
+  // Phase 2 anomaly hunt: mark all 4 clues.
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+    if (i < 3) {
+      await page.keyboard.press('ArrowDown');
+      await waitFrames(page, 3);
+    }
+  }
+  await waitFrames(page, 10);
+  await page.keyboard.press('KeyZ'); // finish anomaly puzzle, starts closing dialogue
+  await waitFrames(page, 5);
+
+  // Drive the resulting dialogue to completion, always taking the
+  // default (first) choice when one is offered.
+  let dialogueDone = false;
+  for (let i = 0; i < 60; i++) {
+    const info = await page.evaluate(() => ({ active: dlg.active, hasChoices: !!dlg.choices }));
+    if (!info.active) { dialogueDone = true; break; }
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
+  if (!dialogueDone) throw new Error('Puzzle-exit dialogue did not finish in time');
+
+  console.log('Capturing the bedroom -> dock stepped fade...');
+  await page.waitForFunction(() => transition.active && transition.frame >= 10, null, { timeout: 5000 });
+  await shot(page, 'dock-transition-mid-fade');
+  await page.waitForFunction(() => !transition.active, null, { timeout: 5000 });
+  await waitFrames(page, 3);
+  const dockState = await page.evaluate(() => ({ state: game.state, mapId: game.mapId }));
+  if (dockState.mapId !== 'dock') {
+    throw new Error(`Expected dock map after transition, got ${JSON.stringify(dockState)}`);
+  }
+  await shot(page, 'dock-arrival');
 
   await browser.close();
 

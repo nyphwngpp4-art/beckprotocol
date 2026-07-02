@@ -325,6 +325,60 @@ function clearSave() {
 }
 
 // ============================================================
+// SCENE TRANSITIONS
+// ============================================================
+// Full-screen black fade: 24 frames out, run midFn, 24 frames in.
+// Stepped alpha only (8 discrete levels) — no smooth fades on NES.
+const TRANS_OUT_FRAMES = 24, TRANS_IN_FRAMES = 24, TRANS_STEPS = 8;
+
+const transition = {
+  active: false,
+  kind: null,
+  frame: 0,
+  midFn: null,
+  midCalled: false,
+
+  start(kind, midFn) {
+    this.active    = true;
+    this.kind      = kind;
+    this.frame     = 0;
+    this.midFn     = midFn;
+    this.midCalled = false;
+  },
+
+  update() {
+    if (!this.active) return;
+    this.frame++;
+    if (!this.midCalled && this.frame >= TRANS_OUT_FRAMES) {
+      this.midCalled = true;
+      if (this.midFn) this.midFn();
+    }
+    if (this.frame >= TRANS_OUT_FRAMES + TRANS_IN_FRAMES) this.active = false;
+  },
+
+  // 0 (clear) .. 1 (fully black), quantized to TRANS_STEPS discrete levels.
+  alpha() {
+    if (!this.active) return 0;
+    const t = this.frame <= TRANS_OUT_FRAMES
+      ? this.frame / TRANS_OUT_FRAMES
+      : Math.max(0, 1 - (this.frame - TRANS_OUT_FRAMES) / TRANS_IN_FRAMES);
+    return Math.ceil(t * TRANS_STEPS) / TRANS_STEPS;
+  },
+
+  draw() {
+    if (!this.active) return;
+    const a = this.alpha();
+    if (a <= 0) return;
+    ctx.fillStyle = `rgba(0,0,0,${a})`;
+    ctx.fillRect(0, 0, GW, GH);
+  },
+};
+
+function transitionToScene(mapId, heal) {
+  transition.start('fade', () => loadScene(mapId, heal));
+}
+
+// ============================================================
 // DIALOGUE SYSTEM
 // ============================================================
 const dlg = {
@@ -1167,7 +1221,7 @@ function updateDockChase() {
       {speaker:'', text:'Four days later: FEDERAL RAID ON EAST DOCK — $4.2M IN WEAPONS SEIZED.'},
       {speaker:'', text:'Nobody knows it was you.'},
       {speaker:'', text:'Two weeks pass. Then something strange happens at school...'},
-    ], () => loadScene('school'));
+    ], () => transitionToScene('school'));
     return;
   }
 
@@ -1261,7 +1315,7 @@ function checkCafeArrow() {
   const arrow = MAPS['school'].npcs.find(n => n.id === 'cafe_arrow');
   if (!arrow) return;
   if (pl.x + pl.w > arrow.x - 8 && pl.x < arrow.x + 20) {
-    loadScene('cafeteria');
+    transitionToScene('cafeteria');
   }
 }
 
@@ -1377,7 +1431,7 @@ function updatePuzzle() {
            speaker:'', text:"Beck puts on dark clothes. Leaves a note: 'Went for a ride. Back by midnight.'"},
           {speaker:'', text:'The East Dock is 20 minutes by bike. It is 10:22 PM.'},
           {speaker:'', text:'She goes alone.'},
-        ], () => loadScene('dock'));
+        ], () => transitionToScene('dock'));
       }
     }
   }
@@ -1574,7 +1628,7 @@ function updateIntro() {
 function updateChapterCard() {
   intro.timer++;
   if (justPressed['KeyZ'] || intro.timer > 200) {
-    loadScene('bedroom');
+    transitionToScene('bedroom');
   }
 }
 
@@ -1862,9 +1916,11 @@ function restartGame() {
 // ============================================================
 function loop() {
   game.frame++;
+  transition.update();
 
   // --- UPDATE ---
-  switch (game.state) {
+  // Input is ignored entirely while a transition is playing.
+  if (!transition.active) switch (game.state) {
     case 'TITLE':
       updateTitle();
       break;
@@ -1927,6 +1983,8 @@ function loop() {
 
     drawHUD();
   }
+
+  transition.draw();
 
   // Clear justPressed AFTER drawing so title/ending screens can read it
   for (const k in justPressed) delete justPressed[k];
