@@ -151,7 +151,22 @@ dock: {
   ],
   npcs:[
     {x:15*TW, y:12*TH, id:'smuggler', col:P.RED, w:14, h:14,
-     dir:'down', speed:0.85, active:false, cooldown:0},
+     dir:'down', speed:0.85, active:false, cooldown:0,
+     guard:true, patrol:false, waypoints:[], wpIdx:0,
+     state:'CALM', susTimer:0, sightTimer:0, alertSpeed:0.95},
+    // Patrol guards — waypoint loops, walk speed 0.6 (M3-T1).
+    {x:3*TW, y:1*TH, id:'guard1', col:P.GRY, w:14, h:14, dir:'right',
+     active:true, cooldown:0, guard:true, patrol:true,
+     waypoints:[{x:3*TW,y:1*TH},{x:18*TW,y:1*TH}], wpIdx:1,
+     state:'CALM', susTimer:0, sightTimer:0, patrolSpeed:0.6, alertSpeed:0.95},
+    {x:2*TW, y:7*TH, id:'guard2', col:P.GRY, w:14, h:14, dir:'right',
+     active:true, cooldown:0, guard:true, patrol:true,
+     waypoints:[{x:2*TW,y:7*TH},{x:19*TW,y:7*TH}], wpIdx:1,
+     state:'CALM', susTimer:0, sightTimer:0, patrolSpeed:0.6, alertSpeed:0.95},
+    {x:5*TW, y:13*TH, id:'guard3', col:P.GRY, w:14, h:14, dir:'right',
+     active:true, cooldown:0, guard:true, patrol:true,
+     waypoints:[{x:5*TW,y:13*TH},{x:19*TW,y:13*TH}], wpIdx:1,
+     state:'CALM', susTimer:0, sightTimer:0, patrolSpeed:0.6, alertSpeed:0.95},
   ],
 },
 
@@ -929,7 +944,7 @@ const NPC_HAIR = {
 // dialogue-portrait renderer.
 function drawNPCHead(sx, sy, npc) {
   function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
-  const [hA, hB] = NPC_HAIR[npc.id] || ['#3C2400','#5C3800'];
+  const [hA, hB] = NPC_HAIR[npc.id] || (npc.guard ? ['#1C1C1C','#000000'] : ['#3C2400','#5C3800']);
   const col = npc.col;
 
   // Hair
@@ -961,13 +976,14 @@ function drawNPCChar(sx, sy, npc, fr) {
 
   // Body/suit colour
   const bodyCol = (id==='indy') ? '#E84898' : (id==='sterling') ? '#2858A0'
-                : (id==='kane')  ? '#505050'  : '#800000';
+                : (id==='kane')  ? '#505050'  : (npc.patrol) ? '#282828' : '#800000';
 
   drawNPCHead(sx, sy, npc);
 
   // Body
   r(3,13, 8,8, bodyCol);
   r(6,13, 2,8, '#00000030');  // seam
+  if (npc.patrol) r(3,18, 8,2, P.YEL); // flashlight-yellow belt trim
 
   // Arms
   const aO = fr ? 1 : 0;
@@ -1236,7 +1252,7 @@ function checkInteract() {
 
   // Check NPCs
   for (const npc of map.npcs) {
-    if (!npc.active || npc.id === 'smuggler' || npc.id === 'cafe_arrow') continue;
+    if (!npc.active || npc.guard || npc.id === 'cafe_arrow') continue;
     const nx = npc.x + 6;
     const ny = npc.y + 7;
     if (Math.abs(cx - nx) < TW * 2 && Math.abs(cy - ny) < TH * 2) {
@@ -1518,6 +1534,30 @@ function drawPause() {
 }
 
 // ============================================================
+// GUARD AI — patrol waypoints (M3-T1)
+// ============================================================
+function patrolGuard(g) {
+  const target = g.waypoints[g.wpIdx];
+  const dx = target.x - g.x, dy = target.y - g.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 2) {
+    g.wpIdx = (g.wpIdx + 1) % g.waypoints.length;
+    return;
+  }
+  g.x += (dx / dist) * g.patrolSpeed;
+  g.y += (dy / dist) * g.patrolSpeed;
+  g.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
+
+function updateGuards() {
+  if (game.mapId !== 'dock') return;
+  MAPS['dock'].npcs.forEach(g => {
+    if (!g.guard || !g.active || !g.patrol) return;
+    patrolGuard(g);
+  });
+}
+
+// ============================================================
 // DOCK CHASE
 // ============================================================
 function triggerDockChase() {
@@ -1723,7 +1763,7 @@ function drawInteractPrompt() {
   }
 
   for (const npc of map.npcs) {
-    if (!npc.active || npc.id === 'smuggler' || npc.id === 'cafe_arrow') continue;
+    if (!npc.active || npc.guard || npc.id === 'cafe_arrow') continue;
     const nx = npc.x + 6;
     const ny = npc.y + 7;
     if (Math.abs(cx-nx) < TW*2 && Math.abs(cy-ny) < TH*2) {
@@ -2362,6 +2402,7 @@ function loadScene(mapId, heal = true) {
   game.dockChaseActive = false;
   game.state          = 'EXPLORE';
   game.frame          = 0;
+  if (mapId === 'dock') resetDockGuards();
 
   const map = MAPS[mapId];
   pl.x     = map.playerSpawn.x;
@@ -2392,10 +2433,24 @@ function restartGame() {
   intro.slide = 0; intro.timer = 0;
   Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
   Object.assign(titleMenu, {idx:0, confirmNewGame:false});
-  // Reset dock npcs
-  MAPS['dock'].npcs.forEach(n => { n.active=false; n.x=15*TW; n.y=5*TH; });
+  resetDockGuards();
   game.frame = 0;
   AU.music('title');
+}
+
+// Patrol guards return to their first waypoint, active and CALM; the
+// smuggler (guard #4) stays hidden until the M3-T4 dock finale.
+function resetDockGuards() {
+  MAPS['dock'].npcs.forEach(g => {
+    if (!g.guard) return;
+    if (g.patrol) {
+      g.x = g.waypoints[0].x; g.y = g.waypoints[0].y;
+      g.wpIdx = 1; g.active = true;
+    } else {
+      g.x = 15*TW; g.y = 12*TH; g.active = false;
+    }
+    g.state = 'CALM'; g.susTimer = 0; g.sightTimer = 0; g.cooldown = 0;
+  });
 }
 
 // ============================================================
@@ -2426,6 +2481,7 @@ function loop() {
       break;
     case 'EXPLORE':
       updatePlayer();
+      updateGuards();
       checkInteract();
       checkCafeArrow();
       updateCam();
