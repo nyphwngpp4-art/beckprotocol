@@ -433,7 +433,7 @@ function setupTouch() {
   };
   row([['↑','ArrowUp']]);
   row([['←','ArrowLeft'],['Z','KeyZ'],['→','ArrowRight']]);
-  row([['↓','ArrowDown'],['X','KeyX'],['','']]);
+  row([['↓','ArrowDown'],['X','KeyX'],['II','Enter']]);
   document.body.appendChild(pad);
 }
 if ('ontouchstart' in window) setupTouch();
@@ -443,7 +443,7 @@ if ('ontouchstart' in window) setupTouch();
 // ============================================================
 const game = {
   state: 'TITLE',      // TITLE, CUTSCENE, EXPLORE, MINIGAME_PUZZLE,
-                       // DOCK_CHASE, DIALOGUE, ENDING
+                       // DOCK_CHASE, DIALOGUE, ENDING, PAUSED
   frame: 0,
   mapId: 'bedroom',
   evidenceFound: [],   // filled with item ids
@@ -451,6 +451,9 @@ const game = {
   dockChaseActive: false,
   cutsceneQueue: [],
   cutsceneIdx: 0,
+  pausedFrom: null,    // state to return to when PAUSED is closed
+  objective: '',
+  objectiveBannerTimer: 0,
 };
 
 // Player
@@ -561,6 +564,41 @@ const transition = {
 function transitionToScene(mapId, heal) {
   AU.sfx('door');
   transition.start('fade', () => loadScene(mapId, heal));
+}
+
+// ============================================================
+// OBJECTIVE SYSTEM
+// ============================================================
+// game.objective is a single data-driven sentence shown on the pause
+// screen's OBJECTIVE tab. Updating it (unless silent) slides a banner
+// down from the top for ~3s to flag the new goal to the player.
+const OBJ_BANNER_FRAMES = 180; // ~3s @ 60fps
+const OBJ_BANNER_SLIDE  = 12;  // frames to slide in/out
+
+function setObjective(text, silent) {
+  if (game.objective === text) return;
+  game.objective = text;
+  if (!silent) game.objectiveBannerTimer = OBJ_BANNER_FRAMES;
+}
+
+function drawObjectiveBanner() {
+  if (game.objectiveBannerTimer <= 0) return;
+  const elapsed = OBJ_BANNER_FRAMES - game.objectiveBannerTimer;
+  let y;
+  if (elapsed < OBJ_BANNER_SLIDE) {
+    y = -14 + Math.ceil(14 * elapsed / OBJ_BANNER_SLIDE);
+  } else if (game.objectiveBannerTimer < OBJ_BANNER_SLIDE) {
+    y = -14 + Math.ceil(14 * game.objectiveBannerTimer / OBJ_BANNER_SLIDE);
+  } else {
+    y = 0;
+  }
+  const label = '★ NEW OBJECTIVE: ' + game.objective;
+  const bw2   = label.length * 6 + 12;
+  const bx2   = Math.floor(GW/2 - bw2/2);
+  px(bx2, y, bw2, 12, P.BLK);
+  px(bx2, y+10, bw2, 2, P.YEL);
+  drawText(label, bx2+6, y+9, P.YEL, 6);
+  game.objectiveBannerTimer--;
 }
 
 // ============================================================
@@ -679,6 +717,7 @@ function updateDialogue() {
     if (dlg.charTimer >= 2) {
       dlg.charTimer = 0;
       dlg.charIdx++;
+      if (dlg.charIdx % 2 === 0) AU.sfx('text');
     }
   }
   if (justPressed['KeyZ'] || justPressed['KeyX']) advanceDialogue();
@@ -720,6 +759,16 @@ function drawWrappedText(text, x, y, maxW, col, size) {
   return cy + lineH;
 }
 
+// Speaker -> 16x16 head-portrait renderer. Reuses the shared head-drawing
+// helpers so portraits never drift from the in-game character sprites.
+// Speakers not listed here (narrator '', DISPATCH) render with no portrait.
+const PORTRAIT_DRAW = {
+  BECK:     (sx, sy) => drawBeckHead(sx, sy),
+  INDY:     (sx, sy) => drawNPCHead(sx, sy, {id:'indy',     col:P.PNK}),
+  STERLING: (sx, sy) => drawNPCHead(sx, sy, {id:'sterling', col:P.LBLU}),
+  KANE:     (sx, sy) => drawNPCHead(sx, sy, {id:'kane',     col:P.LGRY}),
+};
+
 // 8-bit style dialog box
 function drawDialogueBox() {
   if (!dlg.active) return;
@@ -743,21 +792,31 @@ function drawDialogueBox() {
     drawText(dlg.speaker, bx+8, by-2, dlg.speakerCol, 6);
   }
 
+  // Portrait — 16x16 box at left; remaining text shifts right by 24px.
+  const portraitFn = PORTRAIT_DRAW[dlg.speaker];
+  const shift = portraitFn ? 24 : 0;
+  if (portraitFn) {
+    const ppx = bx + 5, ppy = by + 5;
+    px(ppx-1, ppy-1, 18, 18, dlg.speakerCol);
+    px(ppx, ppy, 16, 16, '#0C0C1C');
+    portraitFn(ppx + 1, ppy + 2);
+  }
+
   if (cur.choices) {
     // Draw choices
-    drawText('Choose:', bx+8, by+12, P.LGRY, 6);
+    drawText('Choose:', bx+8+shift, by+12, P.LGRY, 6);
     cur.choices.forEach((ch, i) => {
       const cy = by + 22 + i * 13;
       const sel = i === dlg.choiceIdx;
-      if (sel) px(bx+8, cy-7, bw-16, 11, '#1C1C3C');
-      drawText((sel ? '▶ ' : '  ') + ch.text, bx+12, cy, sel ? P.YEL : P.LGRY, 6);
+      if (sel) px(bx+8+shift, cy-7, bw-16-shift, 11, '#1C1C3C');
+      drawText((sel ? '▶ ' : '  ') + ch.text, bx+12+shift, cy, sel ? P.YEL : P.LGRY, 6);
     });
     return;
   }
 
   // Draw typed text
   const displayed = (cur.text || '').substring(0, dlg.charIdx);
-  drawWrappedText(displayed, bx+8, by+14, bw-20, P.WHT, 6);
+  drawWrappedText(displayed, bx+8+shift, by+14, bw-20-shift, P.WHT, 6);
 
   // Blinking arrow if done
   if (dlg.charIdx >= (cur.text || '').length) {
@@ -772,27 +831,38 @@ function drawDialogueBox() {
 // ============================================================
 // BECK SPRITE  — pixel art, 14px wide × 28px tall, Zelda-style
 // ============================================================
+const BECK_COL = {
+  HA:'#7B3F00', HB:'#C07030', HC:'#3A1E00',
+  SK:'#FFCC9A', EY:'#180800', EW:'#E8E0C8', MC:'#C87060',
+  HO:'#008888', HS:'#005555', JN:'#2858C0', JD:'#162E70', SH:'#181008',
+};
+
+// Shared head-only piece (front-facing), reused by drawBeck('down') and
+// the dialogue-portrait renderer so the two never drift out of sync.
+function drawBeckHead(sx, sy) {
+  const {HA,HB,HC,SK,EW,EY,MC} = BECK_COL;
+  function r(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
+  r(2, 0,10, 2,HA); r(3, 1, 8, 1,HB);          // hair crown
+  r(0, 2, 3, 9,HA); r(11,2, 3, 9,HA);           // hair curtains
+  r(3, 2, 8, 7,SK);                              // face skin
+  r(3, 3, 8, 1,HA);                              // hairline
+  r(3, 5, 3, 1,HC); r(8, 5, 3, 1,HC);           // eyebrows
+  r(3, 6, 3, 2,EW); r(8, 6, 3, 2,EW);           // eye whites
+  r(4, 7, 1, 1,EY); r(9, 7, 1, 1,EY);           // irises
+  r(5, 9, 4, 1,MC);                              // mouth
+  r(5,10, 4, 2,SK);                              // neck
+}
+
 function drawBeck(sx, sy, dir, fr) {
   if (pl.invincible > 0 && Math.floor(game.frame / 4) % 2) return;
 
-  const HA = '#7B3F00', HB = '#C07030', HC = '#3A1E00';
-  const SK = '#FFCC9A', EY = '#180800', EW = '#E8E0C8', MC = '#C87060';
-  const HO = '#008888', HS = '#005555';
-  const JN = '#2858C0', JD = '#162E70', SH = '#181008';
+  const {HA,HB,HC,SK,EY,EW,MC,HO,HS,JN,JD,SH} = BECK_COL;
 
   function r(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
   const aO = fr ? 1 : 0;
 
   if (dir === 'down') {
-    r(2, 0,10, 2,HA); r(3, 1, 8, 1,HB);          // hair crown
-    r(0, 2, 3, 9,HA); r(11,2, 3, 9,HA);           // hair curtains
-    r(3, 2, 8, 7,SK);                              // face skin
-    r(3, 3, 8, 1,HA);                              // hairline
-    r(3, 5, 3, 1,HC); r(8, 5, 3, 1,HC);           // eyebrows
-    r(3, 6, 3, 2,EW); r(8, 6, 3, 2,EW);           // eye whites
-    r(4, 7, 1, 1,EY); r(9, 7, 1, 1,EY);           // irises
-    r(5, 9, 4, 1,MC);                              // mouth
-    r(5,10, 4, 2,SK);                              // neck
+    drawBeckHead(sx, sy);
     r(2,12,10, 7,HO); r(6,12, 2, 7,HS);           // hoodie body + zip
     r(0,12-aO,2,7,HO); r(12,12+aO,2,7,HO);        // arms
     r(1,12,   1,7,HA); r(13,12,   1,7,HA);         // hair tails over arms
@@ -846,29 +916,26 @@ function drawBeck(sx, sy, dir, fr) {
 }
 
 // ── NPC sprites (simpler but distinct) ──────────────────────
-function drawNPCChar(sx, sy, npc, fr) {
+// Hair colour per character, shared by the body sprite and the
+// dialogue-portrait head renderer below.
+const NPC_HAIR = {
+  indy:     ['#C85820','#E87840'], // Indy — auburn short hair
+  sterling: ['#1C1C1C','#383838'], // Sterling — dark/grey suit
+  kane:     ['#808080','#A0A0A0'], // Kane — silver hair
+  smuggler: ['#1C1C1C','#000000'], // Smuggler — dark
+};
+
+// Shared head-only piece (front-facing), reused by drawNPCChar and the
+// dialogue-portrait renderer.
+function drawNPCHead(sx, sy, npc) {
   function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
-
-  const id  = npc.id;
+  const [hA, hB] = NPC_HAIR[npc.id] || ['#3C2400','#5C3800'];
   const col = npc.col;
-
-  // Hair / head colour per character
-  const hairMap = {
-    indy:     ['#C85820','#E87840'], // Indy — auburn short hair
-    sterling: ['#1C1C1C','#383838'], // Sterling — dark/grey suit
-    kane:     ['#808080','#A0A0A0'], // Kane — silver hair
-    smuggler: ['#1C1C1C','#000000'], // Smuggler — dark
-  };
-  const [hA, hB] = hairMap[id] || ['#3C2400','#5C3800'];
-
-  // Body/suit colour
-  const bodyCol = (id==='indy') ? '#E84898' : (id==='sterling') ? '#2858A0'
-                : (id==='kane')  ? '#505050'  : '#800000';
 
   // Hair
   r(3,0, 8,2, hA); r(2,1,10,2, hA);
   // Indy has slightly shorter hair (to ~row 14, not 22)
-  const hairLen = (id==='indy') ? 13 : 6;
+  const hairLen = (npc.id==='indy') ? 13 : 6;
   r(0,2, 3, hairLen, hA); r(11,2, 3, hairLen, hA);
   r(1,3, 1, hairLen-2, hB); r(12,3, 1, hairLen-2, hB);
 
@@ -885,6 +952,18 @@ function drawNPCChar(sx, sy, npc, fr) {
 
   // Neck
   r(5,11, 4,2, P.SKN);
+}
+
+function drawNPCChar(sx, sy, npc, fr) {
+  function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
+
+  const id  = npc.id;
+
+  // Body/suit colour
+  const bodyCol = (id==='indy') ? '#E84898' : (id==='sterling') ? '#2858A0'
+                : (id==='kane')  ? '#505050'  : '#800000';
+
+  drawNPCHead(sx, sy, npc);
 
   // Body
   r(3,13, 8,8, bodyCol);
@@ -912,6 +991,11 @@ function drawPlayer() {
   // Ground shadow at foot level
   px(sx+2, pl.y - cam.y + pl.h, 11, 2, 'rgba(0,0,0,0.35)');
   drawBeck(sx, sy, pl.dir, pl.frame);
+  if (heartRestoreTimer > 0) {
+    if (Math.floor(heartRestoreTimer/4) % 2 === 0)
+      drawText('+', sx+4, sy-2, '#30E060', 8);
+    heartRestoreTimer--;
+  }
 }
 
 function drawNPC(npc) {
@@ -1060,6 +1144,8 @@ function drawMap() {
       drawText('!', sx+6, sy-2, P.BLK, 5);
     }
   });
+
+  drawEvidenceEffects();
 }
 
 // ============================================================
@@ -1108,8 +1194,11 @@ function updatePlayer() {
     }
     pl.frameTimer++;
     if (pl.frameTimer >= 12) { pl.frameTimer = 0; pl.frame = 1 - pl.frame; }
+    dustStepTimer++;
+    if (dustStepTimer >= 8) { dustStepTimer = 0; spawnDust(pl.x + pl.w/2 - 1, pl.y + pl.h - 2); }
   } else {
     pl.frame = 0;
+    dustStepTimer = 0;
   }
 
   const nx = pl.x + dx;
@@ -1160,6 +1249,14 @@ function checkInteract() {
 // ============================================================
 // ITEM INTERACTIONS
 // ============================================================
+const EVIDENCE_IDS = ['evidence_manifest','evidence_crates','evidence_photos','evidence_plates'];
+const EVIDENCE_INFO = {
+  evidence_manifest: 'Shipping manifest — a government seal that doesn\'t belong there.',
+  evidence_crates:   'Unmarked crates packed like weapons, not farm tools.',
+  evidence_photos:   'Photos of rifles, rocket parts, night-vision gear.',
+  evidence_plates:   'Partial plate: 7-KX-4. Colorado commercial.',
+};
+
 function handleItem(item) {
   if (item.id === 'computer') {
     startPuzzleMinigame();
@@ -1192,10 +1289,11 @@ function handleItem(item) {
 
     game.evidenceFound.push(item.id);
     AU.sfx('pickup');
+    spawnEvidenceEffect(item.tx, item.ty);
 
     const lines = texts[item.id] || [{text:'You found something.'}];
-    const allFound = ['evidence_manifest','evidence_crates','evidence_photos','evidence_plates']
-      .every(id => game.evidenceFound.includes(id));
+    const allFound = EVIDENCE_IDS.every(id => game.evidenceFound.includes(id));
+    if (allFound) setObjective('Get out — reach the EXIT.');
 
     startDialogue(allFound ? [
       ...lines,
@@ -1260,7 +1358,7 @@ function startIndyDialogue() {
     {speaker:'BECK', col:P.TEL, text:'...What?'},
     {speaker:'INDY', col:P.PNK, text:'Head right. Cafeteria. They look government-y.'},
   ], () => {
-    // Unlock café
+    setObjective('Head to the cafeteria.', true);
   });
 }
 
@@ -1327,6 +1425,96 @@ function startRecruitmentDialogue() {
     {label:'go_ending',
      speaker:'STERLING', col:P.LBLU, text:"Good luck, Hawthorne."},
   ], () => { game.state = 'ENDING'; AU.music('ending'); });
+}
+
+// ============================================================
+// PAUSE + EVIDENCE JOURNAL
+// ============================================================
+const pause = { tab: 0, optIdx: 0, confirmRestart: false };
+
+function openPause() {
+  game.pausedFrom = game.state;
+  game.state = 'PAUSED';
+  pause.tab = 0;
+  pause.optIdx = 0;
+  pause.confirmRestart = false;
+  AU.sfx('confirm');
+}
+
+function closePause() {
+  game.state = game.pausedFrom;
+  AU.sfx('cancel');
+}
+
+function updatePause() {
+  if (justPressed['ArrowLeft'])  { pause.tab = (pause.tab + 2) % 3; pause.confirmRestart = false; AU.sfx('cancel'); }
+  if (justPressed['ArrowRight']) { pause.tab = (pause.tab + 1) % 3; pause.confirmRestart = false; AU.sfx('cancel'); }
+
+  if (pause.tab !== 2) return; // only OPTIONS tab has interactive rows
+
+  if (pause.confirmRestart) {
+    if (justPressed['KeyZ']) { clearSave(); restartGame(); }
+    if (justPressed['KeyX']) { pause.confirmRestart = false; AU.sfx('cancel'); }
+    return;
+  }
+  if (justPressed['ArrowUp'])   pause.optIdx = Math.max(0, pause.optIdx - 1);
+  if (justPressed['ArrowDown']) pause.optIdx = Math.min(1, pause.optIdx + 1);
+  if (justPressed['KeyZ']) {
+    if (pause.optIdx === 0) AU.toggleMute();
+    else { pause.confirmRestart = true; AU.sfx('cancel'); }
+  }
+}
+
+function drawPause() {
+  ctx.fillStyle = '#000000CC';
+  ctx.fillRect(0, 0, GW, GH);
+
+  const bx = 10, by = 20, bw = GW - 20, bh = GH - 40;
+  px(bx, by, bw, bh, '#08081C');
+  px(bx, by, bw, 2, P.TEL);
+  px(bx, by+bh-2, bw, 2, P.TEL);
+  px(bx, by, 2, bh, P.TEL);
+  px(bx+bw-2, by, 2, bh, P.TEL);
+
+  drawText('PAUSED', bx+8, by+14, P.WHT, 8);
+
+  const tabs = ['OBJECTIVE', 'EVIDENCE', 'OPTIONS'];
+  const tabW = Math.floor((bw - 16) / 3);
+  tabs.forEach((t, i) => {
+    const tx  = bx + 8 + i * tabW;
+    const sel = i === pause.tab;
+    px(tx, by+20, tabW-4, 12, sel ? '#1C1C3C' : '#0C0C1C');
+    drawText(t, tx+4, by+29, sel ? P.YEL : P.GRY, 5);
+  });
+
+  const cx = bx + 10, cy0 = by + 46;
+
+  if (pause.tab === 0) {
+    drawText('CURRENT OBJECTIVE:', cx, cy0, P.LGRY, 6);
+    drawWrappedText(game.objective || 'Explore.', cx, cy0+14, bw-30, P.WHT, 7);
+  } else if (pause.tab === 1) {
+    drawText('EVIDENCE COLLECTED:', cx, cy0, P.LGRY, 6);
+    EVIDENCE_IDS.forEach((id, i) => {
+      const found = game.evidenceFound.includes(id);
+      const y = cy0 + 16 + i * 22;
+      drawText(found ? '[X]' : '[ ]', cx, y, found ? P.LGRN : P.DGRY, 7);
+      drawWrappedText(found ? EVIDENCE_INFO[id] : '??? — not yet found',
+        cx+22, y, bw-56, found ? P.WHT : '#505050', 6);
+    });
+  } else {
+    const opts = ['MUTE: ' + (AU.muted ? 'ON' : 'OFF'), 'RESTART CHAPTER'];
+    opts.forEach((label, i) => {
+      const sel = i === pause.optIdx;
+      const y = cy0 + 16 + i * 16;
+      drawText((sel ? '▶ ' : '  ') + label, cx, y, sel ? P.YEL : P.LGRY, 7);
+    });
+    if (pause.confirmRestart) {
+      drawWrappedText('Restart the chapter? Progress will be lost.', cx, cy0+52, bw-30, P.LRED, 6);
+      drawText('[Z] YES   [X] CANCEL', cx, cy0+66, P.YEL, 6);
+    }
+  }
+
+  drawText('[<>] TAB   [ENTER] RESUME', bx+8, by+bh-8, '#668899', 5);
 }
 
 // ============================================================
@@ -1410,7 +1598,7 @@ function updateDockChase() {
       {speaker:'', text:'Four days later: FEDERAL RAID ON EAST DOCK — $4.2M IN WEAPONS SEIZED.'},
       {speaker:'', text:'Nobody knows it was you.'},
       {speaker:'', text:'Two weeks pass. Then something strange happens at school...'},
-    ], () => transitionToScene('school'));
+    ], () => { setObjective('Find Indy at school.', true); transitionToScene('school'); });
     return;
   }
 
@@ -1418,7 +1606,55 @@ function updateDockChase() {
 }
 
 let damageFlash = 0;
-function showDamageFlash() { damageFlash = 15; }
+let camShakeFrames = 0;
+function showDamageFlash() { damageFlash = 15; camShakeFrames = 4; }
+
+// ============================================================
+// FEEL PASS — footstep dust, evidence pop, heart restore
+// ============================================================
+// Fixed-size pools, no per-frame allocation.
+const DUST = Array.from({length: 16}, () => ({active:false, x:0, y:0, timer:0}));
+let dustStepTimer = 0;
+
+function spawnDust(x, y) {
+  const d = DUST.find(p => !p.active);
+  if (!d) return;
+  d.active = true; d.x = x; d.y = y; d.timer = 14;
+}
+
+function updateDust() {
+  for (const d of DUST) if (d.active && --d.timer <= 0) d.active = false;
+}
+
+function drawDust() {
+  for (const d of DUST) {
+    if (!d.active) continue;
+    const sx = d.x - cam.x, sy = d.y - cam.y;
+    px(sx, sy, 2, 2, d.timer > 7 ? '#B0A088' : '#655848');
+  }
+}
+
+const EVIDENCE_FX = Array.from({length: 4}, () => ({active:false, tx:0, ty:0, timer:0}));
+function spawnEvidenceEffect(tx, ty) {
+  const e = EVIDENCE_FX.find(p => !p.active);
+  if (!e) return;
+  e.active = true; e.tx = tx; e.ty = ty; e.timer = 6;
+}
+
+function drawEvidenceEffects() {
+  for (const e of EVIDENCE_FX) {
+    if (!e.active) continue;
+    const sx = e.tx * TW - cam.x, sy = e.ty * TH - cam.y;
+    if (e.timer > 4) px(sx, sy, TW, TH, '#FFFFFF'); // white flash, first 2 frames
+    const step = 6 - e.timer;               // 0..5, stepped scale-in
+    const size = 2 + Math.min(step, 3) * 2; // 2,4,6,8,8,8
+    px(sx + TW/2 - size/2, sy - size, size, size, P.AMB);
+    e.timer--;
+    if (e.timer <= 0) e.active = false;
+  }
+}
+
+let heartRestoreTimer = 0;
 
 // ============================================================
 // HUD
@@ -1609,6 +1845,7 @@ function updatePuzzle() {
         // Done — advance to dock
         puzzle.active = false;
         game.state    = 'EXPLORE';
+        setObjective('Get to the East Dock.');
         startDialogue([
           {speaker:'BECK', col:P.TEL, text:'The coordinates in that photo match the East Dock. 11 PM tonight.'},
           {speaker:'BECK', col:P.TEL, text:"Someone is using Pattern Lock to send instructions. It's a dead drop."},
@@ -1958,6 +2195,51 @@ function updateTitle() {
   }
 }
 
+// Night skyline silhouette + a hand-authored 24x40 "box art" Beck, drawn
+// once above the title box (y 0..48) — not the 14x28 in-game sprite
+// stretched. fillRect only, per pillar 2.
+const SKYLINE = [
+  {x:0,   w:18, h:14}, {x:18,  w:12, h:26}, {x:30,  w:20, h:10},
+  {x:50,  w:14, h:22}, {x:64,  w:10, h:34}, {x:74,  w:16, h:16},
+  {x:166, w:16, h:16}, {x:182, w:10, h:34}, {x:192, w:14, h:22},
+  {x:206, w:20, h:10}, {x:226, w:12, h:26}, {x:238, w:18, h:14},
+];
+const SKY_BASE = 48;
+
+function drawTitleSkyline() {
+  SKYLINE.forEach(b => {
+    const y = SKY_BASE - b.h;
+    px(b.x, y, b.w, b.h, '#0A0A1C');
+    for (let wy = y+3; wy < SKY_BASE-3; wy += 5) {
+      for (let wx = b.x+2; wx < b.x+b.w-2; wx += 5) {
+        if ((wx+wy) % 11 < 3) px(wx, wy, 2, 2, '#3A3A18');
+      }
+    }
+  });
+  px(0, SKY_BASE, GW, 1, '#050510');
+}
+
+function drawBeckTitle(sx, sy) {
+  const {HA,HB,HC,SK,EY,EW,MC,HO,HS,JN,JD,SH} = BECK_COL;
+  function r(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
+
+  r(4, 0,16, 3,HA); r(6, 2,12, 2,HB);        // hair crown
+  r(0, 3, 5,16,HA); r(19,3, 5,16,HA);         // hair curtains
+  r(5, 3,14,12,SK);                            // face
+  r(5, 5,14, 1,HA);                            // hairline
+  r(5, 9, 4, 2,HC); r(15, 9, 4, 2,HC);        // eyebrows
+  r(5,11, 5, 3,EW); r(14,11, 5, 3,EW);        // eye whites
+  r(7,12, 2, 2,EY); r(16,12, 2, 2,EY);        // irises
+  r(9,17, 6, 2,MC);                            // mouth
+  r(8,19, 8, 3,SK);                            // neck
+  r(3,22,18,11,HO); r(10,22, 4,11,HS);        // hoodie + zip
+  r(0,22, 4,12,HO); r(20,22, 4,12,HO);        // arms
+  r(0,34, 4, 3,SK); r(20,34, 4, 3,SK);        // hands
+  r(5,33,14, 4,JN); r(10,33, 4, 4,JD);        // jeans waist
+  r(5,37, 6, 3,JN); r(13,37, 6, 3,JN);        // legs
+  r(4,39, 8, 1,SH); r(12,39, 8, 1,SH);        // shoes
+}
+
 function drawTitle() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, GW, GH);
@@ -1969,6 +2251,9 @@ function drawTitle() {
     const b = (Math.floor(game.frame/30) + Math.floor(sx/40)) % 2;
     px(sx, sy, 1, 1, b ? P.WHT : P.GRY);
   });
+
+  drawTitleSkyline();
+  drawBeckTitle(116, 8);
 
   // Title box
   px(20, 60, GW-40, 70, '#08081C');
@@ -2081,7 +2366,7 @@ function loadScene(mapId, heal = true) {
   const map = MAPS[mapId];
   pl.x     = map.playerSpawn.x;
   pl.y     = map.playerSpawn.y;
-  if (heal && pl.hearts < pl.maxHearts) AU.sfx('heart');
+  if (heal && pl.hearts < pl.maxHearts) { AU.sfx('heart'); heartRestoreTimer = 40; }
   if (heal) pl.hearts = Math.min(pl.maxHearts, pl.hearts + 1); // restore 1 heart on scene change
   pl.invincible = 60;
   updateCam();
@@ -2101,8 +2386,9 @@ function continueGame(save) {
 function restartGame() {
   Object.assign(game, {
     state:'TITLE', frame:0, mapId:'bedroom',
-    evidenceFound:[], choices:{}, dockChaseActive:false,
+    evidenceFound:[], choices:{}, dockChaseActive:false, pausedFrom:null,
   });
+  setObjective('Solve the Pattern Lock puzzle on your computer.', true);
   intro.slide = 0; intro.timer = 0;
   Object.assign(pl, {x:0,y:0,dir:'down',frame:0,moving:false,hearts:3,invincible:0});
   Object.assign(titleMenu, {idx:0, confirmNewGame:false});
@@ -2123,7 +2409,12 @@ function loop() {
 
   // --- UPDATE ---
   // Input is ignored entirely while a transition is playing.
-  if (!transition.active) switch (game.state) {
+  if (!transition.active) {
+    if (justPressed['Enter']) {
+      if (game.state === 'EXPLORE' || game.state === 'DOCK_CHASE') openPause();
+      else if (game.state === 'PAUSED') closePause();
+    }
+    switch (game.state) {
     case 'TITLE':
       updateTitle();
       break;
@@ -2151,9 +2442,14 @@ function loop() {
       checkInteract();
       updateCam();
       break;
+    case 'PAUSED':
+      updatePause();
+      break;
     case 'ENDING':
       break;
+    }
   }
+  updateDust();
 
   // --- DRAW ---
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
@@ -2169,14 +2465,29 @@ function loop() {
   } else if (game.state === 'ENDING') {
     drawEnding();
   } else {
+    // 4-frame camera shake on damage: offset cam for this draw only,
+    // then restore so collision/updateCam math next frame is unaffected.
+    let shakeX = 0, shakeY = 0;
+    if (camShakeFrames > 0) {
+      shakeX = (camShakeFrames % 2 === 0) ? 2 : -2;
+      shakeY = (camShakeFrames % 2 === 0) ? -2 : 2;
+      cam.x += shakeX; cam.y += shakeY;
+      camShakeFrames--;
+    }
+
     drawMap();
 
     // Draw NPCs
     const map = MAPS[game.mapId];
     map.npcs.forEach(drawNPC);
 
+    // Footstep dust (behind Beck)
+    drawDust();
+
     // Draw player
     drawPlayer();
+
+    if (shakeX || shakeY) { cam.x -= shakeX; cam.y -= shakeY; }
 
     // Dialogue box
     drawDialogueBox();
@@ -2185,8 +2496,11 @@ function loop() {
     if (game.state === 'MINIGAME_PUZZLE') drawPuzzle();
 
     drawHUD();
+
+    if (game.state === 'PAUSED') drawPause();
   }
 
+  drawObjectiveBanner();
   drawMuteGlyph();
   transition.draw();
 
