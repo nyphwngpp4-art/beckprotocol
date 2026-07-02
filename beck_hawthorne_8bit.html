@@ -495,9 +495,13 @@ if ('ontouchstart' in window) setupTouch();
 // ============================================================
 const game = {
   state: 'TITLE',      // TITLE, CUTSCENE, EXPLORE, MINIGAME_PUZZLE,
-                       // DIALOGUE, ENDING, PAUSED
+                       // DIALOGUE, ENDING, ENDING_REPORT, ENDING_TEASER,
+                       // PAUSED
                        // (the dock finale runs inside EXPLORE, gated by
                        // game.dockChaseActive — see M3-T4)
+                       // (ENDING -> ENDING_REPORT -> ENDING_TEASER is the
+                       // M5-T2 ending ceremony; each stage advances on
+                       // [Z] through a stepped fade — see drawEnding*)
   frame: 0,
   mapId: 'bedroom',
   evidenceFound: [],   // filled with item ids
@@ -1537,6 +1541,11 @@ function startRecruitmentDialogue() {
     {speaker:'BECK', col:P.TEL, text:"How did you get into my school?"},
     {speaker:'STERLING', col:P.LBLU, text:"Authorization from the district. The visit is legitimate."},
     {speaker:'KANE', col:P.LGRY, text:"Unlike your walk to the East Dock, which was not."},
+    // M5-T1: choice echo — Kane calls out that Beck told a civilian (Indy)
+    // everything, if that's the branch the player picked earlier.
+    ...(game.choices.indy === 'full'
+      ? [{speaker:'KANE', col:P.LGRY, text:"You told a civilian, too. Your friend. That's a second name on a list that shouldn't exist."}]
+      : []),
     {choices:[
       {text:'"I don\'t know what you mean."', pick:['lunch1','deny'], jump:'lunch_deny'},
       {text:'"How long have you known?"',     pick:['lunch1','ask'],  jump:'lunch_ask'},
@@ -2399,6 +2408,45 @@ const INTRO_SLIDES = [
 
 const intro = { slide: 0, timer: 0 };
 
+// M5-T3: one small pixel-art vignette above each slide's text — satellite
+// dish, phone screen, crate silhouette, eye — echoing that slide's beat.
+// All fillRect, each capped at 40x24, drawn centered at (cx, topY).
+const INTRO_VIGNETTES = ['dish', 'phone', 'crate', 'eye'];
+
+function drawIntroVignette(kind, cx, topY) {
+  if (kind === 'dish') {
+    px(cx-1,  topY+14, 2,  8, P.GRY);   // pole
+    px(cx-12, topY+2,  24, 3, P.LGRY);  // dish rim
+    px(cx-9,  topY+5,  18, 3, P.GRY);
+    px(cx-6,  topY+8,  12, 3, P.GRY);
+    px(cx-3,  topY+11, 6,  3, P.DGRY);  // dish throat
+    px(cx-7,  topY-3,  2,  2, P.TEL);   // signal blips
+    px(cx+3,  topY-6,  2,  2, P.LTEL);
+    px(cx+8,  topY-1,  2,  2, P.TEL);
+  } else if (kind === 'phone') {
+    px(cx-9, topY,    18, 22, P.DGRY);     // body
+    px(cx-7, topY+2,  14, 16, '#082830');  // screen
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 3; c++)
+        px(cx-5 + c*4, topY+4 + r*4, 2, 2, (r+c) % 2 === 0 ? P.TEL : P.LTEL); // pattern dots
+    px(cx-2, topY+20, 4, 1, P.GRY);        // home button
+  } else if (kind === 'crate') {
+    px(cx-14, topY+4,  28, 18, P.WOD);   // body
+    px(cx-14, topY+4,  28, 3,  P.TAN);   // top edge light
+    px(cx-14, topY+12, 28, 2,  P.DWOD);  // horizontal slat
+    px(cx-2,  topY+4,  2,  18, P.DWOD);  // vertical slat
+    px(cx-14, topY+4,  2,  18, P.DWOD);  // left edge shadow
+    px(cx+12, topY+4,  2,  18, P.DWOD);  // right edge shadow
+  } else if (kind === 'eye') {
+    px(cx-14, topY+9,  28, 8,  P.WHT);   // sclera
+    px(cx-14, topY+7,  28, 2,  P.DGRY);  // upper lid
+    px(cx-14, topY+17, 28, 2,  P.DGRY);  // lower lid
+    px(cx-5,  topY+7,  10, 12, P.TEL);   // iris
+    px(cx-2,  topY+10, 4,  6,  P.BLK);   // pupil
+    px(cx-3,  topY+9,  2,  2,  P.WHT);   // glint
+  }
+}
+
 function updateIntro() {
   intro.timer++;
   if (justPressed['KeyZ'] || justPressed['Space'] || intro.timer > 300) {
@@ -2430,11 +2478,13 @@ function drawIntro() {
   const slide = INTRO_SLIDES[intro.slide];
   if (!slide) return;
 
+  drawIntroVignette(INTRO_VIGNETTES[intro.slide], GW/2, 14);
+
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
-  let y = 22;
+  let y = 44;
 
   if (slide.location) {
     ctx.fillStyle = P.YEL;
@@ -2650,6 +2700,11 @@ function drawTitle() {
 // ============================================================
 // ENDING SCREEN
 // ============================================================
+// M5-T2: the ending is a 3-stage ceremony — narrative (ENDING) ->
+// mission-report card (ENDING_REPORT) -> Chapter Two teaser
+// (ENDING_TEASER) -> stepped fade back to TITLE with the save cleared.
+const PSYCH_PROFILE = { pushback:'DIRECT', maybe:'GUARDED', silent:'SILENT' };
+
 function drawEnding() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, GW, GH);
@@ -2691,18 +2746,87 @@ function drawEnding() {
     drawText(l, 30, 56 + i * 13, P.WHT, 6);
   });
 
-  px(20, 145, GW-40, 1, P.DGRY);
-  drawText('Three days later:', 30, 160, P.GRY, 5);
-  drawText('She calls the number.', 30, 172, P.TEL, 6);
-  drawText('Two days after that:', 30, 186, P.GRY, 5);
-  drawText('Her grandfather says yes.', 30, 198, P.WHT, 6);
+  px(20, 138, GW-40, 1, P.DGRY);
+  drawText('Three days later:', 30, 152, P.GRY, 5);
+  drawText('She calls the number.', 30, 163, P.TEL, 6);
+  drawText('Two days after that:', 30, 176, P.GRY, 5);
+  drawText('Her grandfather says yes.', 30, 187, P.WHT, 6);
 
-  px(20, 208, GW-40, 1, P.DGRY);
+  px(20, 196, GW-40, 1, P.DGRY);
+
+  // M5-T1: choice echo — if Beck deflected with Indy earlier, Indy isn't
+  // fooled and texts her during the ending instead of Kane calling it out.
+  if (game.choices.indy === 'deflect') {
+    drawText('Her phone buzzes. INDY:', 30, 207, P.GRY, 5);
+    drawText('"you\'re still a bad liar. call me."', 30, 217, P.PNK, 5);
+  }
+
   if (Math.floor(game.frame/30)%2===0)
-    drawText('CHAPTER TWO: TEAM — COMING SOON', 18, 226, P.YEL, 5);
+    drawText('[Z] CONTINUE', 92, 226, P.YEL, 5);
 
   if (justPressed['KeyZ'])
-    restartGame();
+    transition.start('fade', () => { game.state = 'ENDING_REPORT'; });
+}
+
+function drawEndingReport() {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  px(10, 10, GW-20, GH-20, '#080818');
+  px(10, 10, GW-20, 2, P.TEL);
+  px(10, GH-12, GW-20, 2, P.TEL);
+
+  drawText('MISSION REPORT', 58, 32, P.TEL, 6);
+  px(20, 37, GW-40, 1, P.DGRY);
+
+  const ev = game.evidenceFound.length;
+  drawText('EVIDENCE COLLECTED', 30, 62, P.LGRY, 5);
+  drawText(`${ev}/4`, 30, 76, ev >= 4 ? P.YEL : P.WHT, 8);
+
+  drawText('HEARTS REMAINING', 30, 102, P.LGRY, 5);
+  for (let i = 0; i < pl.maxHearts; i++) {
+    const hx = 30 + i * 12, hy = 110;
+    px(hx, hy, 8, 7, i < pl.hearts ? P.RED : P.DGRY);
+    px(hx+2, hy-1, 2, 1, i < pl.hearts ? P.LRED : '#404040');
+    px(hx+5, hy-1, 2, 1, i < pl.hearts ? P.LRED : '#404040');
+  }
+
+  drawText('PSYCH PROFILE', 30, 140, P.LGRY, 5);
+  const finalChoice = game.choices['final'] || 'silent';
+  const profile = PSYCH_PROFILE[finalChoice] || 'SILENT';
+  drawText(`[ ${profile} ]`, 30, 154, P.YEL, 7);
+
+  px(20, 174, GW-40, 1, P.DGRY);
+  drawText('Chapter One: complete.', 30, 190, P.WHT, 6);
+
+  if (Math.floor(game.frame/30)%2===0)
+    drawText('[Z] CONTINUE', 92, 226, P.YEL, 5);
+
+  if (justPressed['KeyZ'])
+    transition.start('fade', () => { game.state = 'ENDING_TEASER'; });
+}
+
+function drawEndingTeaser() {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, GW, GH);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.YEL;
+  ctx.font = '9px monospace';
+  ctx.fillText('CHAPTER TWO: TEAM', GW/2, GH/2 - 6);
+  ctx.fillStyle = P.LGRY;
+  ctx.font = '6px monospace';
+  ctx.fillText('COMING SOON', GW/2, GH/2 + 10);
+  ctx.restore();
+
+  if (Math.floor(game.frame/30)%2===0)
+    drawText('[Z] RETURN TO TITLE', 66, GH-16, P.GRY, 5);
+
+  if (justPressed['KeyZ']) {
+    clearSave();
+    transition.start('fade', () => restartGame());
+  }
 }
 
 // ============================================================
@@ -2810,6 +2934,8 @@ function loop() {
       updatePause();
       break;
     case 'ENDING':
+    case 'ENDING_REPORT':
+    case 'ENDING_TEASER':
       break;
     }
   }
@@ -2828,6 +2954,10 @@ function loop() {
     drawChapterCard();
   } else if (game.state === 'ENDING') {
     drawEnding();
+  } else if (game.state === 'ENDING_REPORT') {
+    drawEndingReport();
+  } else if (game.state === 'ENDING_TEASER') {
+    drawEndingTeaser();
   } else {
     // 4-frame camera shake on damage: offset cam for this draw only,
     // then restore so collision/updateCam math next frame is unaffected.

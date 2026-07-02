@@ -14,6 +14,11 @@
 // Also covers M4: the dressed school hallway (wandering student
 // flavor line) and the cafeteria (lunch counter + seated students),
 // confirming the new dressing tiles don't block the walkway.
+// Also covers M5: each intro slide's pixel-art vignette, the Indy/Kane
+// choice echoes (both "full" and "deflect" branches, driven through the
+// real dialogue choice UI), and the 3-stage ending ceremony (ENDING ->
+// ENDING_REPORT mission card -> ENDING_TEASER -> TITLE with the save
+// cleared, a regression check on restartGame()).
 // Fails (exit 1) on any console error or a failed assertion.
 // Screenshots each stage to tools/screens/.
 // ============================================================
@@ -63,6 +68,48 @@ async function holdDirection(page, code, frames) {
   await page.keyboard.up(code);
 }
 
+// Presses Z to advance dialogue (accepting whatever default choice is
+// selected) until dlg.active goes false, or gives up after maxSteps.
+async function drainDialogue(page, maxSteps = 40) {
+  for (let i = 0; i < maxSteps; i++) {
+    const active = await page.evaluate(() => dlg.active);
+    if (!active) return true;
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
+  return false;
+}
+
+// Captures every string drawn via ctx.fillText from this point on into
+// window.__fillTextCalls, so canvas-only text (no DOM) can be asserted on.
+async function captureFillText(page) {
+  await page.evaluate(() => {
+    window.__fillTextCalls = [];
+    const proto = CanvasRenderingContext2D.prototype;
+    if (!proto.__origFillText) proto.__origFillText = proto.fillText;
+    proto.fillText = function (text, ...rest) {
+      window.__fillTextCalls.push(text);
+      return proto.__origFillText.call(this, text, ...rest);
+    };
+  });
+}
+
+async function fillTextSince(page) {
+  return page.evaluate(() => window.__fillTextCalls.join(' | '));
+}
+
+// Presses Z (completing typewriter text, then advancing lines) until a
+// choice prompt is showing, or gives up after maxSteps.
+async function advanceToChoices(page, maxSteps = 20) {
+  for (let i = 0; i < maxSteps; i++) {
+    const hasChoices = await page.evaluate(() => !!dlg.choices);
+    if (hasChoices) return true;
+    await page.keyboard.press('KeyZ');
+    await waitFrames(page, 3);
+  }
+  return false;
+}
+
 async function main() {
   const errors = [];
   const execPath = findContainerChromium();
@@ -89,11 +136,16 @@ async function main() {
   const audioCreated = await page.evaluate(() => !!AU.ctx);
   if (!audioCreated) throw new Error('AU.ctx was not created after first keydown');
 
-  // Advance through the remaining intro slides into the chapter card.
-  for (let i = 0; i < 4; i++) {
+  // Advance through the remaining intro slides into the chapter card,
+  // capturing each slide's M5-T3 vignette (dish/phone/crate/eye) as we go.
+  // Slide 0 ("dish") was already captured just above as intro-slide.
+  for (let i = 1; i <= 3; i++) {
     await page.keyboard.press('KeyZ');
     await waitFrames(page, 6);
+    await shot(page, `intro-slide-${i}`);
   }
+  await page.keyboard.press('KeyZ'); // slide 3 -> CHAPTER_CARD
+  await waitFrames(page, 6);
   const stateAtCard = await page.evaluate(() => game.state);
   if (stateAtCard !== 'CHAPTER_CARD') {
     throw new Error(`Expected CHAPTER_CARD, got ${stateAtCard}`);
@@ -450,6 +502,116 @@ async function main() {
     await page.keyboard.press('KeyZ');
     await waitFrames(page, 3);
   }
+
+  console.log('M5-T1: Indy choice echo — selecting "full" disclosure via the real choice UI...');
+  await page.evaluate(() => startIndyDialogue());
+  await waitFrames(page, 2);
+  if (!(await advanceToChoices(page))) throw new Error('Indy dialogue never reached the choice prompt');
+  await page.keyboard.press('ArrowDown');
+  await waitFrames(page, 2);
+  await page.keyboard.press('ArrowDown');
+  await waitFrames(page, 2);
+  const indyChoiceIdx = await page.evaluate(() => dlg.choiceIdx);
+  if (indyChoiceIdx !== 2) throw new Error(`Expected Indy choiceIdx 2 ("full"), got ${indyChoiceIdx}`);
+  await page.keyboard.press('KeyZ'); // confirm "full"
+  await waitFrames(page, 2);
+  if (!(await drainDialogue(page))) throw new Error('Indy "full" dialogue did not finish in time');
+  const indyChoiceFull = await page.evaluate(() => game.choices.indy);
+  if (indyChoiceFull !== 'full') throw new Error(`Expected game.choices.indy === 'full', got '${indyChoiceFull}'`);
+
+  console.log('M5-T1: checking Kane echoes the "full" disclosure in the recruitment scene...');
+  await page.evaluate(() => startRecruitmentDialogue());
+  await waitFrames(page, 2);
+  const kaneEchoPresent = await page.evaluate(() =>
+    dlg.lines.some(l => l.speaker === 'KANE' && l.text && l.text.includes('civilian'))
+  );
+  if (!kaneEchoPresent) throw new Error('Expected Kane\'s "full"-disclosure echo line in the recruitment dialogue');
+
+  console.log('Driving the recruitment scene to the ending (default choices -> "pushback"/DIRECT)...');
+  if (!(await drainDialogue(page, 60))) throw new Error('Recruitment dialogue did not finish in time');
+  const endingState = await page.evaluate(() => ({ state: game.state, final: game.choices.final }));
+  if (endingState.state !== 'ENDING' || endingState.final !== 'pushback') {
+    throw new Error(`Expected ENDING with final='pushback', got ${JSON.stringify(endingState)}`);
+  }
+
+  console.log('Verifying the "full"-branch ending screen does NOT show the "deflect" Indy text...');
+  await captureFillText(page);
+  await waitFrames(page, 2);
+  const fullBranchTexts = await fillTextSince(page);
+  if (fullBranchTexts.includes('bad liar')) {
+    throw new Error('Did not expect the "deflect" Indy text echo on the "full"-branch ending');
+  }
+  await shot(page, 'ending-full-branch');
+
+  console.log('M5-T2: advancing ENDING -> ENDING_REPORT (mission report card)...');
+  await captureFillText(page);
+  await page.keyboard.press('KeyZ');
+  await page.waitForFunction(() => transition.active, null, { timeout: 5000 });
+  await page.waitForFunction(() => !transition.active, null, { timeout: 5000 });
+  await waitFrames(page, 3);
+  const reportState = await page.evaluate(() => game.state);
+  if (reportState !== 'ENDING_REPORT') throw new Error(`Expected ENDING_REPORT, got '${reportState}'`);
+  await waitFrames(page, 2);
+  const reportTexts = await fillTextSince(page);
+  if (!reportTexts.includes('DIRECT')) {
+    throw new Error(`Expected PSYCH PROFILE 'DIRECT' rendered on the report card, got: ${reportTexts}`);
+  }
+  if (!reportTexts.includes('4/4')) {
+    throw new Error(`Expected evidence count '4/4' on the report card, got: ${reportTexts}`);
+  }
+  await shot(page, 'ending-report-card');
+
+  console.log('M5-T2: advancing ENDING_REPORT -> ENDING_TEASER (Chapter Two teaser)...');
+  await captureFillText(page);
+  await page.keyboard.press('KeyZ');
+  await page.waitForFunction(() => transition.active, null, { timeout: 5000 });
+  await page.waitForFunction(() => !transition.active, null, { timeout: 5000 });
+  await waitFrames(page, 3);
+  const teaserState = await page.evaluate(() => game.state);
+  if (teaserState !== 'ENDING_TEASER') throw new Error(`Expected ENDING_TEASER, got '${teaserState}'`);
+  const teaserTexts = await fillTextSince(page);
+  if (!teaserTexts.includes('CHAPTER TWO: TEAM') || !teaserTexts.includes('COMING SOON')) {
+    throw new Error(`Expected Chapter Two teaser text, got: ${teaserTexts}`);
+  }
+  await shot(page, 'ending-teaser');
+
+  console.log('M5-T2: advancing ENDING_TEASER -> TITLE, verifying the save was cleared (restartGame regression check)...');
+  await page.keyboard.press('KeyZ');
+  await page.waitForFunction(() => transition.active, null, { timeout: 5000 });
+  await page.waitForFunction(() => !transition.active, null, { timeout: 5000 });
+  await waitFrames(page, 3);
+  const afterFinish = await page.evaluate(() => ({
+    state: game.state, mapId: game.mapId, evidenceFound: game.evidenceFound,
+    choices: game.choices, hearts: pl.hearts, introSlide: intro.slide,
+    saveCleared: localStorage.getItem('beck_save_v1') === null,
+  }));
+  if (afterFinish.state !== 'TITLE') throw new Error(`Expected TITLE after the ending ceremony, got '${afterFinish.state}'`);
+  if (afterFinish.mapId !== 'bedroom' || afterFinish.evidenceFound.length !== 0 ||
+      Object.keys(afterFinish.choices).length !== 0 || afterFinish.hearts !== 3 || afterFinish.introSlide !== 0) {
+    throw new Error(`restartGame() regression: unexpected reset state ${JSON.stringify(afterFinish)}`);
+  }
+  if (!afterFinish.saveCleared) throw new Error('Expected the save to be cleared after completing the ending ceremony');
+  await shot(page, 'title-after-ending');
+
+  console.log('M5-T1: Indy choice echo — selecting "deflect" via the real choice UI...');
+  await page.evaluate(() => { game.choices = {}; startIndyDialogue(); });
+  await waitFrames(page, 2);
+  if (!(await advanceToChoices(page))) throw new Error('Indy dialogue never reached the choice prompt');
+  await page.keyboard.press('KeyZ'); // confirm default choiceIdx 0 ("deflect")
+  await waitFrames(page, 2);
+  if (!(await drainDialogue(page))) throw new Error('Indy "deflect" dialogue did not finish in time');
+  const indyChoiceDeflect = await page.evaluate(() => game.choices.indy);
+  if (indyChoiceDeflect !== 'deflect') throw new Error(`Expected game.choices.indy === 'deflect', got '${indyChoiceDeflect}'`);
+
+  console.log('M5-T1: verifying Indy texts Beck during the ending on the "deflect" branch...');
+  await captureFillText(page);
+  await page.evaluate(() => { game.choices.final = 'silent'; game.state = 'ENDING'; });
+  await waitFrames(page, 2);
+  const deflectTexts = await fillTextSince(page);
+  if (!deflectTexts.includes('bad liar')) {
+    throw new Error(`Expected Indy's "deflect" text echo on the ending screen, got: ${deflectTexts}`);
+  }
+  await shot(page, 'ending-deflect-branch');
 
   console.log('Checking KeyM toggles mute...');
   const mutedBefore = await page.evaluate(() => AU.muted);
