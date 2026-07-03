@@ -956,31 +956,37 @@ function drawDialogueBox() {
 // BECK SPRITE  — pixel art, 14px wide × 28px tall, Zelda-style
 // ============================================================
 const BECK_COL = {
-  HA:'#7B3F00', HB:'#C07030', HC:'#3A1E00',
+  HA:'#7B3F00', HB:'#C07030',
   SK:'#FFCC9A', EY:'#180800', EW:'#E8E0C8', MC:'#C87060',
   HO:'#008888', HS:'#005555', JN:'#2858C0', JD:'#162E70', SH:'#181008',
+  SC:'#F8D800', // ponytail scrunchie
 };
 
 // Shared head-only piece (front-facing), reused by drawBeck('down') and
 // the dialogue-portrait renderer so the two never drift out of sync.
+// Full rounded crown + straight bangs (hair OVER the forehead — never
+// skin above a hair stripe, which reads as a receding hairline), soft
+// eyes with no eyebrow blocks, small mouth, high ponytail poking up.
 function drawBeckHead(sx, sy) {
-  const {HA,HB,HC,SK,EW,EY,MC} = BECK_COL;
+  const {HA,HB,SK,EW,EY,MC,SC} = BECK_COL;
   function r(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
-  r(2, 0,10, 2,HA); r(3, 1, 8, 1,HB);          // hair crown
-  r(0, 2, 3, 9,HA); r(11,2, 3, 9,HA);           // hair curtains
-  r(3, 2, 8, 7,SK);                              // face skin
-  r(3, 3, 8, 1,HA);                              // hairline
-  r(3, 5, 3, 1,HC); r(8, 5, 3, 1,HC);           // eyebrows
-  r(3, 6, 3, 2,EW); r(8, 6, 3, 2,EW);           // eye whites
-  r(4, 7, 1, 1,EY); r(9, 7, 1, 1,EY);           // irises
-  r(5, 9, 4, 1,MC);                              // mouth
-  r(5,10, 4, 2,SK);                              // neck
+  r(3, 1, 8, 1,HA); r(2, 2,10, 2,HA);           // rounded crown
+  r(4, 2, 3, 1,HB);                              // shine
+  r(8, 0, 4, 2,HA); r(9, 0, 2, 1,HB);           // ponytail poking up
+  r(9, 2, 2, 1,SC);                              // scrunchie
+  r(1, 3, 2, 8,HA); r(11, 3, 2, 8,HA);          // hair framing the face
+  r(3, 4, 8, 7,SK);                              // face
+  r(3, 4, 8, 1,HA); r(3, 5, 2, 1,HA);           // straight bangs + side sweep
+  r(4, 6, 2, 2,EW); r(8, 6, 2, 2,EW);           // eyes
+  r(4, 7, 1, 1,EY); r(9, 7, 1, 1,EY);           // pupils
+  r(6, 9, 2, 1,MC);                              // small mouth
+  r(5,11, 4, 1,SK);                              // neck
 }
 
 function drawBeck(sx, sy, dir, fr) {
   if (pl.invincible > 0 && Math.floor(game.frame / 4) % 2) return;
 
-  const {HA,HB,HC,SK,EY,EW,MC,HO,HS,JN,JD,SH} = BECK_COL;
+  const {HA,HB,SK,EY,EW,MC,HO,HS,JN,JD,SH,SC} = BECK_COL;
 
   function r(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
   const aO = fr ? 1 : 0;
@@ -989,32 +995,36 @@ function drawBeck(sx, sy, dir, fr) {
     drawBeckHead(sx, sy);
     r(2,12,10, 7,HO); r(6,12, 2, 7,HS);           // hoodie body + zip
     r(0,12-aO,2,7,HO); r(12,12+aO,2,7,HO);        // arms
-    r(1,12,   1,7,HA); r(13,12,   1,7,HA);         // hair tails over arms
     r(0,19-aO,2,2,SK); r(12,19+aO,2,2,SK);        // hands
     r(3,19, 8, 3,JN); r(6,19, 2, 3,JD);           // jeans
     r(3,22, 3,3+aO,JN); r(8,22,3,3-aO,JN);        // legs
     r(2,25+aO,5,2,SH); r(7,25-aO,5,2,SH);         // shoes
 
   } else if (dir === 'up') {
-    r(2, 0,10, 2,HA); r(5, 1, 4, 1,HB);           // crown
-    r(0, 2,14,10,HA); r(4, 2, 6, 9,HB);           // back of head — all hair
-    r(5,12, 4, 1,SK);                              // neck (tiny)
+    r(3, 0, 8, 2,HA); r(2, 2,10, 2,HA);           // crown from behind
+    r(1, 4,12, 8,HA);                              // back of head
+    r(2, 4, 2, 6,HB);                              // sheen
     r(2,13,10, 6,HO); r(6,13, 2, 6,HS);           // hoodie
     r(0,13-aO,2,7,HO); r(12,13+aO,2,7,HO);        // arms
-    r(1,13,   1,7,HA); r(13,13,   1,7,HA);         // hair tails
     r(0,20-aO,2,2,SK); r(12,20+aO,2,2,SK);        // hands
     r(3,19, 8, 3,JN); r(6,19, 2, 3,JD);           // jeans
     r(3,22, 3,3+aO,JN); r(8,22,3,3-aO,JN);        // legs
     r(2,25+aO,5,2,SH); r(7,25-aO,5,2,SH);         // shoes
+    r(5, 4, 4, 1,SC);                              // scrunchie, high on the head
+    r(5, 5, 4, 7,HB);                              // ponytail against the dark hair
+    r(5,12, 4,5+aO,HA);                            // tail hangs over the hoodie
+    r(6,17+aO,2, 2,HB);                            // tail tip, bounces as she walks
 
   } else if (dir === 'left') {
-    r(7, 0, 7,14,HA); r(8, 1, 5,12,HB);           // hair trailing right
-    r(1, 2, 6, 7,SK);                              // face profile
-    r(1, 3, 6, 1,HA);                              // hairline
-    r(2, 5, 3, 1,HC);                              // eyebrow
-    r(1, 6, 4, 2,EW); r(1, 7, 1, 1,EY);           // eye
-    r(1, 9, 3, 1,MC);                              // mouth
-    r(3,10, 3, 2,SK);                              // neck
+    r(1, 1,10, 3,HA); r(8, 1, 2, 1,HB);           // crown (bangs wrap forward)
+    r(7, 4, 4, 7,HA);                              // back of head
+    r(1, 4, 6, 7,SK);                              // face profile
+    r(1, 4, 6, 1,HA);                              // bangs over the forehead
+    r(2, 6, 2, 2,EW); r(2, 7, 1, 1,EY);           // eye
+    r(1, 9, 2, 1,MC);                              // small mouth
+    r(4,11, 3, 1,SK);                              // neck
+    r(10, 4, 2, 2,SC);                             // scrunchie at the back
+    r(11,5+aO,3, 6,HA); r(12,6+aO,1, 4,HB);       // ponytail trailing behind, swings
     r(2,12, 9, 7,HO); r(2,12, 2, 7,HS);           // hoodie + front shadow
     r(0,12-aO,2,7,HO); r(11,12+aO,2,7,HO);        // arms
     r(0,19-aO,2,2,SK); r(11,19+aO,2,2,SK);        // hands
@@ -1023,13 +1033,15 @@ function drawBeck(sx, sy, dir, fr) {
     r(2,25+aO,5,2,SH); r(6,25-aO,5,2,SH);         // shoes
 
   } else { // right
-    r(0, 0, 7,14,HA); r(1, 1, 5,12,HB);           // hair trailing left
-    r(7, 2, 6, 7,SK);                              // face profile
-    r(7, 3, 6, 1,HA);                              // hairline
-    r(9, 5, 3, 1,HC);                              // eyebrow
-    r(9, 6, 4, 2,EW); r(12, 7, 1, 1,EY);          // eye
-    r(10,9, 3, 1,MC);                              // mouth
-    r(8,10, 3, 2,SK);                              // neck
+    r(3, 1,10, 3,HA); r(4, 1, 2, 1,HB);           // crown (bangs wrap forward)
+    r(3, 4, 4, 7,HA);                              // back of head
+    r(7, 4, 6, 7,SK);                              // face profile
+    r(7, 4, 6, 1,HA);                              // bangs over the forehead
+    r(10,6, 2, 2,EW); r(11,7, 1, 1,EY);           // eye
+    r(11,9, 2, 1,MC);                              // small mouth
+    r(7,11, 3, 1,SK);                              // neck
+    r(2, 4, 2, 2,SC);                              // scrunchie at the back
+    r(0,5+aO, 3, 6,HA); r(1,6+aO, 1, 4,HB);       // ponytail trailing behind, swings
     r(3,12, 9, 7,HO); r(11,12, 2, 7,HS);          // hoodie + front shadow
     r(0,12-aO,2,7,HO); r(12,12+aO,2,7,HO);        // arms
     r(0,19-aO,2,2,SK); r(12,19+aO,2,2,SK);        // hands
@@ -2691,20 +2703,23 @@ function drawTitleSkyline() {
 }
 
 function drawBeckTitle(sx, sy) {
-  const {HA,HB,HC,SK,EY,EW,MC,HO,HS,JN,JD,SH} = BECK_COL;
+  const {HA,HB,SK,EY,EW,MC,HO,HS,JN,JD,SH,SC} = BECK_COL;
   function r(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(sx+x,sy+y,w,h); }
 
-  r(4, 0,16, 3,HA); r(6, 2,12, 2,HB);        // hair crown
-  r(0, 3, 5,16,HA); r(19,3, 5,16,HA);         // hair curtains
-  r(5, 3,14,12,SK);                            // face
-  r(5, 5,14, 1,HA);                            // hairline
-  r(5, 9, 4, 2,HC); r(15, 9, 4, 2,HC);        // eyebrows
-  r(5,11, 5, 3,EW); r(14,11, 5, 3,EW);        // eye whites
-  r(7,12, 2, 2,EY); r(16,12, 2, 2,EY);        // irises
-  r(9,17, 6, 2,MC);                            // mouth
-  r(8,19, 8, 3,SK);                            // neck
+  r(5, 1,14, 2,HA); r(3, 3,18, 3,HA);         // rounded crown
+  r(7, 2, 6, 1,HB);                            // shine
+  r(1, 6, 4,13,HA);                            // hair framing the left cheek
+  r(18, 4, 4, 2,SC);                           // scrunchie, high right
+  r(18, 6, 5,14,HA); r(20, 8, 1, 9,HB);       // side ponytail down the right
+  r(19,20, 3, 4,HA);                           // tail tip past the shoulder
+  r(5, 6,13,11,SK);                            // face
+  r(5, 6,13, 2,HA); r(5, 8, 4, 1,HA);         // straight bangs + side sweep
+  r(7,10, 4, 3,EW); r(13,10, 4, 3,EW);        // eyes (no eyebrow blocks)
+  r(8,11, 2, 2,EY); r(14,11, 2, 2,EY);        // pupils
+  r(10,15, 4, 1,MC);                           // small smile
+  r(8,17, 8, 5,SK);                            // neck
   r(3,22,18,11,HO); r(10,22, 4,11,HS);        // hoodie + zip
-  r(0,22, 4,12,HO); r(20,22, 4,12,HO);        // arms
+  r(0,22, 4,12,HO); r(20,24, 4,10,HO);        // arms
   r(0,34, 4, 3,SK); r(20,34, 4, 3,SK);        // hands
   r(5,33,14, 4,JN); r(10,33, 4, 4,JD);        // jeans waist
   r(5,37, 6, 3,JN); r(13,37, 6, 3,JN);        // legs
